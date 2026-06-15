@@ -3,37 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Student Portal — Library System</title>
+    <title>Student Portal — BCST Library</title>
     <link rel="stylesheet" href="styles.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="img/logo.png" type="image/png" />
     <style>
-      .section-card {
-        background: var(--card);
-        border-radius: var(--radius);
-        padding: 20px;
-        box-shadow: var(--shadow);
-        border: 1px solid var(--border);
-        margin-top: 20px;
-      }
-      .section-card h2 {
-        margin: 0 0 16px;
-        font-size: 17px;
-        font-weight: 700;
-        color: var(--navy);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid var(--blue-lt);
-      }
-      .filter-bar {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-      }
+      .filter-bar { display:flex; gap:10px; align-items:center; margin-bottom:18px; flex-wrap:wrap; }
     </style>
   </head>
   <body>
@@ -41,19 +15,19 @@
 
       <!-- Header -->
       <header class="page-header">
-        <div style="display:flex;align-items:center;gap:14px;">
-          <img src="img/logo.png" alt="BCST Logo"
-            style="height:56px;width:56px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.25));" />
+        <div class="header-logo-group">
+          <img src="img/logo.png" alt="BCST Logo" class="header-logo" />
           <div>
-            <div style="font-size:10.5px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:rgba(255,255,255,0.65);margin-bottom:2px;">Bohol College of Science and Technology, Inc.</div>
+            <div class="header-school-name">Bohol College of Science and Technology, Inc.</div>
             <h1>Student Portal</h1>
             <p id="welcome-text" class="muted">Browse available books and request to borrow.</p>
           </div>
         </div>
         <div class="header-actions">
-          <span id="connection-status" class="connection-status" title="Network status">Checking…</span>
+          <span id="firebase-status" class="firebase-status fb-connecting">⟳ Syncing…</span>
+          <span id="connection-status" class="connection-status">Checking…</span>
           <button id="logout-btn" type="button" class="secondary">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
             </svg>
             Logout
@@ -61,26 +35,37 @@
         </div>
       </header>
 
+      <!-- Student nav -->
       <nav class="admin-nav student-nav" aria-label="Student navigation">
         <div class="admin-nav-inner">
-          <button type="button" class="nav-item" data-view="books">Available Books</button>
-          <button type="button" class="nav-item" data-view="requests">My Requests</button>
+          <button type="button" class="nav-item" data-view="books">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            Available Books
+          </button>
+          <button type="button" class="nav-item" data-view="requests">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            </svg>
+            My Requests
+          </button>
         </div>
       </nav>
 
       <!-- Available Books -->
       <div id="books" class="section-card library admin-section">
         <h2>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.2">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.2">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
           </svg>
           Available Books
         </h2>
         <div class="filter-bar">
           <select id="category-filter" style="min-width:180px;">
-            <option value="">All Categories</option>
+            <option value="">All Sheets</option>
           </select>
-          <input id="book-search" placeholder="Search by title, author, ISBN or category" style="flex:1;min-width:180px;" />
+          <input id="book-search" placeholder="Search by title, author, ISBN or category…" style="flex:1;min-width:180px;" />
         </div>
         <div id="books-wrap"></div>
         <div id="books-pagination"></div>
@@ -90,7 +75,8 @@
       <div id="requests" class="section-card library admin-section">
         <h2>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
           </svg>
           My Borrow Requests
         </h2>
@@ -102,5 +88,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="auth.js"></script>
     <script src="student.js"></script>
+    <script src="firebase-sync.js"></script>
   </body>
 </html>

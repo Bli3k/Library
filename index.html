@@ -3,39 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Library System</title>
+    <title>Library System — BCST</title>
     <link rel="stylesheet" href="styles.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="img/logo.png" type="image/png" />
-    <style>
-      .auth-page {
-        background:
-          radial-gradient(ellipse at 20% 80%, rgba(22,163,74,0.18) 0%, transparent 55%),
-          radial-gradient(ellipse at 80% 10%, rgba(37,99,235,0.22) 0%, transparent 55%),
-          linear-gradient(150deg, #0b1c36 0%, #0f2240 40%, #0d3320 100%);
-      }
-      .spinner {
-        width: 36px; height: 36px;
-        border: 3px solid #e2e8f0;
-        border-top-color: #2563eb;
-        border-radius: 50%;
-        animation: spin 0.7s linear infinite;
-        margin: 0 auto 16px;
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
   </head>
   <body>
     <div class="container auth-page">
-      <div class="auth-card" style="text-align:center;">
-               <img src="img/logo.png" alt="Bohol College of Science and Technology Logo"
-                 style="height:80px;width:80px;object-fit:contain;display:block;margin:0 auto 14px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.2));" />
-        <h1 style="margin:0 0 6px;font-size:22px;font-weight:800;color:#0f2240;">Library System</h1>
+      <div class="auth-card" style="text-align:center;padding:48px 36px;">
+        <img src="img/logo.png" alt="BCST Logo"
+          style="height:80px;width:80px;object-fit:contain;display:block;margin:0 auto 16px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.22));" />
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:0.9px;text-transform:uppercase;color:#2563eb;margin-bottom:8px;">
+          Bohol College of Science and Technology, Inc.
+        </div>
+        <h1 style="margin:0 0 20px;font-size:22px;font-weight:800;color:#0f2240;">Library System</h1>
         <div class="spinner"></div>
-        <p style="color:#64748b;font-size:14px;margin:0;">Redirecting…</p>
+        <p style="color:#64748b;font-size:14px;margin:0;">Loading your session…</p>
       </div>
     </div>
-
     <script src="auth.js"></script>
     <script>
       const user = LibraryAuth.getCurrentUser()

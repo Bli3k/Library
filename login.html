@@ -3,108 +3,80 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Login — Library System</title>
+    <title>Sign In — BCST Library</title>
     <link rel="stylesheet" href="styles.css" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <link rel="icon" href="img/logo.png" type="image/png" />
     <style>
       .auth-page {
         background:
-          radial-gradient(ellipse at 20% 80%, rgba(22,163,74,0.18) 0%, transparent 55%),
-          radial-gradient(ellipse at 80% 10%, rgba(37,99,235,0.22) 0%, transparent 55%),
-          linear-gradient(150deg, #0b1c36 0%, #0f2240 40%, #0d3320 100%);
+          radial-gradient(ellipse at 20% 80%, rgba(5,150,105,0.22) 0%, transparent 55%),
+          radial-gradient(ellipse at 80% 10%, rgba(37,99,235,0.28) 0%, transparent 55%),
+          linear-gradient(150deg, #0a1628 0%, #0f2240 40%, #0b2d1a 100%);
       }
-      .auth-card {
-        border-top: 3px solid transparent;
-        border-image: linear-gradient(90deg, #2563eb, #16a34a) 1;
-        border-radius: 18px;
-        border-top-left-radius: 18px;
-        border-top-right-radius: 18px;
+      .brand-area { text-align: center; margin-bottom: 24px; }
+      .brand-area img {
+        height: 82px; width: 82px; object-fit: contain;
+        display: block; margin: 0 auto 14px;
+        filter: drop-shadow(0 6px 16px rgba(0,0,0,0.22));
       }
-      .brand-strip {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        margin-bottom: 20px;
-      }
-      .brand-icon {
-        width: 48px; height: 48px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #2563eb, #16a34a);
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 6px 20px rgba(37,99,235,0.3);
-      }
-      .brand-icon svg { width: 26px; height: 26px; fill: #fff; }
-      .brand-name {
-        font-size: 20px; font-weight: 800; color: #0f2240;
-        letter-spacing: -0.3px;
-      }
-      .brand-name span { color: #2563eb; }
-      .divider {
-        display: flex; align-items: center; gap: 10px;
-        margin: 4px 0;
-        color: #94a3b8; font-size: 12px;
-      }
-      .divider::before, .divider::after {
-        content: ''; flex: 1; height: 1px; background: #e2e8f0;
-      }
-      .hint-box {
-        background: #f0f6ff;
-        border: 1px solid #bfdbfe;
-        border-radius: 8px;
-        padding: 10px 14px;
-        display: flex; align-items: center; gap: 8px;
-        font-size: 12.5px; color: #1e40af;
-      }
-      .hint-box svg { flex-shrink: 0; width: 16px; height: 16px; }
+      .brand-area .school { font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase; color: #2563eb; margin-bottom: 6px; }
+      .brand-area h1 { margin: 0 0 4px; font-size: 24px; font-weight: 800; color: #0f2240; letter-spacing: -0.3px; }
+      .brand-area p { color: #64748b; font-size: 13.5px; margin: 0; }
     </style>
   </head>
   <body>
     <div class="container auth-page">
       <div class="auth-card">
-
-        <header style="text-align:center;margin-bottom:4px;">
-          <img src="img/logo.png" alt="Bohol College of Science and Technology Logo"
-            style="height:88px;width:88px;object-fit:contain;display:block;margin:0 auto 12px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.15));" />
-          <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#2563eb;margin-bottom:6px;">Bohol College of Science and Technology, Inc.</div>
-          <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#0f2240;letter-spacing:-0.3px;">Library System</h1>
-          <p style="color:#64748b;font-size:14px;margin:0;">Sign in to browse books or manage the library.</p>
-        </header>
+        <div class="brand-area">
+          <img src="img/logo.png" alt="Bohol College of Science and Technology Logo" />
+          <div class="school">Bohol College of Science and Technology, Inc.</div>
+          <h1>Library System</h1>
+          <p>Sign in to browse books or manage the library.</p>
+        </div>
 
         <form id="login-form" class="auth-form">
           <label>
             Email
-            <input id="login-id" type="text" required placeholder="Your registered email" />
+            <input id="login-id" type="text" required placeholder="Your registered email or username" autocomplete="username" />
           </label>
           <label>
             Password
-            <input id="login-password" type="password" required placeholder="Your password" />
+            <input id="login-password" type="password" required placeholder="Your password" autocomplete="current-password" />
           </label>
           <p id="login-error" class="error-msg" hidden></p>
-          <button type="submit">Sign In</button>
+          <button type="submit">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Sign In
+          </button>
         </form>
 
-        <div class="divider" style="margin:14px 0 10px;">or</div>
+        <div class="divider" style="margin:16px 0 12px;">or</div>
 
-        <button id="demo-login" type="button">Demo Admin Sign-in</button>
+        <button id="demo-login" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          Demo Admin Sign-in
+        </button>
 
-        <div class="hint-box" style="margin-top:14px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="hint-box">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
           Admin demo — email: <strong>admin</strong> &nbsp;·&nbsp; password: <strong>admin123</strong>
         </div>
 
         <p class="auth-footer">
-          No account yet? <a href="register.html">Register here</a>
+          No account? <a href="register.html">Register here</a>
         </p>
       </div>
     </div>
 
-    
     <script src="auth.js"></script>
     <script src="ui.js"></script>
     <script src="login.js"></script>
+    <script src="firebase-sync.js"></script>
   </body>
 </html>
