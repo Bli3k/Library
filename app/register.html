@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Register — Library System</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="icon" href="logo.png" type="image/png" />
+    <style>
+      .auth-page {
+        background:
+          radial-gradient(ellipse at 15% 85%, rgba(22,163,74,0.18) 0%, transparent 55%),
+          radial-gradient(ellipse at 85% 10%, rgba(37,99,235,0.22) 0%, transparent 55%),
+          linear-gradient(150deg, #0b1c36 0%, #0f2240 40%, #0d3320 100%);
+        align-items: flex-start;
+        padding: 32px 20px;
+      }
+      .auth-card {
+        border-top: 3px solid;
+        border-image: linear-gradient(90deg, #2563eb, #16a34a) 1;
+        border-radius: 18px;
+        border-top-left-radius: 18px;
+        border-top-right-radius: 18px;
+        margin: 0 auto;
+      }
+      .section-label {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: #94a3b8;
+        margin: 18px 0 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-label::after {
+        content: ''; flex: 1; height: 1px; background: #e2e8f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container auth-page">
+      <div class="auth-card auth-card-wide">
+
+        <header style="text-align:center;margin-bottom:8px;">
+          <img src="logo.png" alt="Bohol College of Science and Technology Logo"
+            style="height:80px;width:80px;object-fit:contain;display:block;margin:0 auto 12px;filter:drop-shadow(0 4px 10px rgba(0,0,0,0.13));" />
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#2563eb;margin-bottom:6px;">Bohol College of Science and Technology, Inc.</div>
+          <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#0f2240;letter-spacing:-0.3px;">Create Account</h1>
+          <p style="color:#64748b;font-size:14px;margin:0;">Register as a student to browse and request books.</p>
+        </header>
+
+        <form id="register-form" class="auth-form">
+
+          <div class="section-label">Personal Information</div>
+          <div class="row">
+            <label>
+              Full Name
+              <input id="name" required placeholder="Juan Dela Cruz" />
+            </label>
+            <label>
+              Age
+              <input id="age" type="number" min="1" max="120" required placeholder="18" />
+            </label>
+          </div>
+
+          <div class="section-label">Academic Details</div>
+          <div class="row">
+            <label>
+              Course / Strand
+              <input id="course-strand" required placeholder="e.g. STEM, ABM, ICT" />
+            </label>
+            <label>
+              Year / Level
+              <input id="year" required placeholder="e.g. Grade 11, 1st Year" />
+            </label>
+            <label>
+              Section
+              <input id="section" required placeholder="e.g. A, B, Emerald" />
+            </label>
+          </div>
+
+          <div class="section-label">Contact Information</div>
+          <label>
+            Address
+            <input id="address" required placeholder="Complete home address" />
+          </label>
+          <div class="row">
+            <label>
+              Email
+              <input id="email" type="email" required placeholder="you@example.com" />
+            </label>
+            <label>
+              Contact Number
+              <input id="contact-number" placeholder="09XX XXX XXXX (optional)" />
+            </label>
+          </div>
+
+          <div class="section-label">Security</div>
+          <div class="row">
+            <label>
+              Password
+              <input id="password" type="password" minlength="6" required placeholder="At least 6 characters" />
+            </label>
+            <label>
+              Confirm Password
+              <input id="confirm-password" type="password" minlength="6" required placeholder="Re-enter password" />
+            </label>
+          </div>
+
+          <p id="register-error" class="error-msg" hidden></p>
+
+          <div class="actions" style="margin-top:6px;">
+            <button type="submit" style="flex:1;padding:12px;font-size:14px;background:linear-gradient(135deg,#2563eb,#16a34a);">
+              Create Account
+            </button>
+            <a class="secondary-link" href="login.html">Back to Login</a>
+          </div>
+        </form>
+
+      </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="ui.js"></script>
+    <script src="register.js"></script>
+  </body>
+</html>
