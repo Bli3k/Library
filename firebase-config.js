@@ -1,14 +1,3 @@
-// firebase-sync.js — Background Firebase Firestore sync for BCST Library System
-// CHANGES FROM PREVIOUS VERSION:
-//   1. Added CLIENT_TOKEN to every write so Firestore security rules can validate writes
-//   2. Fixed writeBatch() 500-document limit — large book lists are now chunked
-//   3. pullBooks() now also merges existing local fields instead of only adding new docs
-//   4. pullRequests() conflict resolution improved: any newer reviewedAt wins, not just remote
-//   5. Added periodic re-sync every 5 minutes (catches changes made on other devices)
-//   6. Added syncAll() — pushes books + requests + users in one call (used on page load)
-//   7. updateFirebaseStatus() moved to top so it is available even before try/catch
-//   8. App-check / duplicate-init guard so loading the script twice does not throw
-//   9. _clientToken field stripped from data before saving back to localStorage
 
 (async function () {
 
@@ -16,11 +5,6 @@
   if (window.__libraryFirebaseInit) return
   window.__libraryFirebaseInit = true
 
-  // ── Shared secret written into every Firestore document on write ────────────
-  // Must match the token used in your Firestore security rules:
-  //   function hasValidToken() {
-  //     return request.resource.data._clientToken == "bcst-library-2025";
-  //   }
   const CLIENT_TOKEN = 'bcst-library-2025'
 
   const firebaseConfig = {

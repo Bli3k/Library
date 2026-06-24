@@ -34,7 +34,6 @@
 
     // ── Network / connection status indicator ────────────────────────────────
     // Updates the "Online / Offline" pill in the page header.
-    // Note: the Firebase status pill is handled separately by firebase-sync.js.
     try {
       function updateConnectionUI(online) {
         const status  = document.getElementById('connection-status')
