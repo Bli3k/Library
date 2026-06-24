@@ -1,58 +1,59 @@
-// UI helpers: mobile nav and auto-load sample on first admin visit
+// ui.js — UI helpers: mobile nav toggle, connection status indicator, auto-load sample
 (function () {
-  // Mobile nav toggle
   document.addEventListener('DOMContentLoaded', function () {
-    const btn = document.querySelector('.hamburger')
-    const nav = document.querySelector('.nav-links')
-    if (btn && nav) {
-      btn.addEventListener('click', function () {
-        const open = btn.getAttribute('aria-expanded') === 'true'
-        btn.setAttribute('aria-expanded', open ? 'false' : 'true')
-        nav.setAttribute('aria-hidden', open ? 'true' : 'false')
-        nav.classList.toggle('open')
+
+    // ── Mobile nav toggle ────────────────────────────────────────────────────
+    const hamburger = document.querySelector('.hamburger')
+    const navLinks  = document.querySelector('.nav-links')
+    if (hamburger && navLinks) {
+      hamburger.addEventListener('click', function () {
+        const open = hamburger.getAttribute('aria-expanded') === 'true'
+        hamburger.setAttribute('aria-expanded', open ? 'false' : 'true')
+        navLinks.setAttribute('aria-hidden', open ? 'true' : 'false')
+        navLinks.classList.toggle('open')
       })
     }
 
-    // Auto-load sample on first admin visit
-    if (window.location.pathname.endsWith('/admin.html') || window.location.pathname.endsWith('admin.html')) {
+    // ── Auto-load sample Excel on first admin visit ───────────────────────────
+    // Fires the Load Sample button once automatically so the demo works out of
+    // the box without the admin needing to import anything manually.
+    const isAdminPage =
+      window.location.pathname.endsWith('/admin.html') ||
+      window.location.pathname.endsWith('admin.html')
+
+    if (isAdminPage) {
       try {
         const seen = localStorage.getItem('library_demo_sample_loaded_v1')
         if (!seen) {
-          // mark seen so it's not auto-loaded again
           localStorage.setItem('library_demo_sample_loaded_v1', '1')
-          // trigger the loadSample button if present
           const btnLoad = document.getElementById('load-sample-btn')
-          if (btnLoad) setTimeout(function () { btnLoad.click() }, 400)
+          if (btnLoad) setTimeout(function () { btnLoad.click() }, 500)
         }
       } catch (err) {}
     }
 
-      // Automatic network detection and UI update (applies to admin & student pages)
-      try {
-        function updateConnectionUI(online) {
-          const status = document.getElementById('connection-status')
-          const onlineMode = document.getElementById('online-mode')
-          const syncStatus = document.getElementById('sync-status')
-          const syncBtn = document.getElementById('sync-btn')
-          if (status) {
-            status.textContent = online ? 'Online' : 'Offline'
-            status.classList.remove('online', 'offline', 'muted')
-            status.classList.add(online ? 'online' : 'offline')
-          }
-          if (onlineMode) {
-            try { onlineMode.checked = online } catch (err) {}
-          }
-          if (syncStatus) {
-            syncStatus.textContent = online ? 'Connected' : 'Offline'
-          }
-          if (syncBtn) {
-            syncBtn.disabled = !online
-          }
+    // ── Network / connection status indicator ────────────────────────────────
+    // Updates the "Online / Offline" pill in the page header.
+    // Note: the Firebase status pill is handled separately by firebase-sync.js.
+    try {
+      function updateConnectionUI(online) {
+        const status  = document.getElementById('connection-status')
+        const syncBtn = document.getElementById('sync-btn')   // the manual POST sync btn
+
+        if (status) {
+          status.textContent = online ? 'Online' : 'Offline'
+          status.classList.remove('online', 'offline')
+          status.classList.add(online ? 'online' : 'offline')
         }
 
-        updateConnectionUI(navigator.onLine)
-        window.addEventListener('online', function () { updateConnectionUI(true) })
-        window.addEventListener('offline', function () { updateConnectionUI(false) })
-      } catch (err) {}
+        // Disable the manual POST sync button when offline
+        if (syncBtn) syncBtn.disabled = !online
+      }
+
+      updateConnectionUI(navigator.onLine)
+      window.addEventListener('online',  function () { updateConnectionUI(true)  })
+      window.addEventListener('offline', function () { updateConnectionUI(false) })
+    } catch (err) {}
+
   })
 })()

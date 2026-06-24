@@ -247,9 +247,16 @@
 
   window.LibraryAuth = {
     USERS_KEY, SESSION_KEY, REQUESTS_KEY, BOOKS_KEY,
-    loadUsers, saveUsers, loadSession, loadRequests, saveRequests, loadBooks, saveBooks,
+    // data loaders — all exposed so firebase-sync.js can call loadUsers()
+    loadUsers, saveUsers,
+    loadSession,
+    loadRequests, saveRequests,
+    loadBooks, saveBooks,
+    // auth actions
     register, login, logout, getCurrentUser, requireAuth,
-    getAvailableCopies, getApprovedBorrowCount, createBorrowRequest, updateBorrowRequest,
+    // borrow helpers
+    getAvailableCopies, getApprovedBorrowCount,
+    createBorrowRequest, updateBorrowRequest,
     ensureDefaultAdmin
   }
 })()
