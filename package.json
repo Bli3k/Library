@@ -1,0 +1,54 @@
+{
+  "name": "bcst-library-system",
+  "version": "1.0.0",
+  "description": "BCST Library System — Desktop App",
+  "author": "Bohol College of Science and Technology, Inc.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --x64",
+    "build:dir": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.bcst.library",
+    "productName": "BCST Library System",
+    "copyright": "Copyright © 2025 Bohol College of Science and Technology, Inc.",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "assets/**/*",
+      "app/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "img/logo.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "BCST Library System"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Bli3k",
+      "repo": "Library"
+    }
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.0.0"
+  }
+}

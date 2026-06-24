@@ -551,23 +551,243 @@
     setTimeout(() => { syncStatus.textContent = '' }, 4000)
   }
 
+
   function initAdminNav() {
     const nav = document.querySelector('.admin-nav'); if (!nav) return
     const navItems = nav.querySelectorAll('.nav-item')
-    const views = ['add-edit', 'books', 'requests']
+    const views = ['add-edit', 'books', 'requests', 'accounts', 'change-password']
     function show(view) {
-      views.forEach(v => { const el = document.getElementById(v); if (el) el.style.display = v === view ? '' : 'none' })
-      navItems.forEach(it => {
+      views.forEach(function (v) { const el = document.getElementById(v); if (el) el.style.display = v === view ? '' : 'none' })
+      navItems.forEach(function (it) {
         if (it.dataset.view === view) { it.classList.add('active'); it.setAttribute('aria-current', 'true') }
         else { it.classList.remove('active'); it.removeAttribute('aria-current') }
       })
+      if (view === 'accounts') renderAccounts()
+      if (view === 'change-password') populateStudentSelect()
       try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) {}
     }
-    navItems.forEach(it => it.addEventListener('click', function () { show(this.dataset.view) }))
+    navItems.forEach(function (it) { it.addEventListener('click', function () { show(this.dataset.view) }) })
     show('books')
   }
 
-  // Listen for Firebase pull updates
+  // ── Mask email: show first 3 chars + *** + @domain ────────────────────────
+  function maskEmail(email) {
+    if (!email || !email.includes('@')) return email || '—'
+    var parts   = email.split('@')
+    var local   = parts[0]
+    var domain  = parts[1]
+    var visible = local.slice(0, Math.min(3, local.length))
+    return visible + '***@' + domain
+  }
+
+  // ── Student Accounts view ─────────────────────────────────────────────────
+  var accountsWrap   = document.getElementById('accounts-wrap')
+  var accountsSearch = document.getElementById('accounts-search')
+
+  function renderAccounts(q) {
+    if (!accountsWrap) return
+    var users    = LibraryAuth.loadUsers()
+    var students = users.filter(function (u) { return u.role === 'student' })
+    q = (q !== undefined ? q : (accountsSearch ? accountsSearch.value : '')).trim().toLowerCase()
+
+    var filtered = students.filter(function (u) {
+      if (!q) return true
+      return (
+        String(u.name         || '').toLowerCase().includes(q) ||
+        String(u.email        || '').toLowerCase().includes(q) ||
+        String(u.courseStrand || '').toLowerCase().includes(q) ||
+        String(u.section      || '').toLowerCase().includes(q)
+      )
+    })
+
+    if (filtered.length === 0) {
+      accountsWrap.innerHTML = '<p class="muted" style="padding:16px 0;">' +
+        (students.length === 0 ? 'No student accounts registered yet.' : 'No accounts match your search.') +
+        '</p>'
+      return
+    }
+
+    accountsWrap.innerHTML = ''
+    filtered.forEach(function (u) {
+      var card = document.createElement('div')
+      card.className = 'account-card'
+
+      // --- info side ---
+      var info = document.createElement('div')
+      info.className = 'account-info'
+
+      var nameEl = document.createElement('div')
+      nameEl.className   = 'account-name'
+      nameEl.textContent = u.name || '(no name)'
+
+      var emailEl = document.createElement('div')
+      emailEl.className   = 'account-email'
+      emailEl.textContent = maskEmail(u.email || u.loginId || '')
+
+      var meta = document.createElement('div')
+      meta.className = 'account-meta'
+      ;[u.courseStrand, u.year, u.section ? 'Sec ' + u.section : ''].forEach(function (val) {
+        if (!val || !String(val).trim()) return
+        var tag = document.createElement('span')
+        tag.className = 'account-tag'
+        tag.textContent = val
+        meta.appendChild(tag)
+      })
+
+      var pwWrap = document.createElement('div')
+      pwWrap.className = 'account-pw-wrap'
+
+      var pwLabel = document.createElement('span')
+      pwLabel.textContent = 'Password: '
+      pwLabel.style.cssText = 'font-weight:600;font-size:12px;'
+
+      var pwText = document.createElement('span')
+      pwText.className   = 'account-pw-text'
+      pwText.textContent = '••••••••'
+      pwText.dataset.pw      = u.password || ''
+      pwText.dataset.visible = 'false'
+
+      var toggleBtn = document.createElement('button')
+      toggleBtn.className   = 'toggle-pw-btn'
+      toggleBtn.textContent = 'Show'
+      toggleBtn.type        = 'button'
+      toggleBtn.addEventListener('click', function () {
+        if (pwText.dataset.visible === 'false') {
+          pwText.textContent     = pwText.dataset.pw || '(not set)'
+          pwText.dataset.visible = 'true'
+          toggleBtn.textContent  = 'Hide'
+        } else {
+          pwText.textContent     = '••••••••'
+          pwText.dataset.visible = 'false'
+          toggleBtn.textContent  = 'Show'
+        }
+      })
+
+      pwWrap.appendChild(pwLabel)
+      pwWrap.appendChild(pwText)
+      pwWrap.appendChild(toggleBtn)
+
+      info.appendChild(nameEl)
+      info.appendChild(emailEl)
+      info.appendChild(meta)
+      info.appendChild(pwWrap)
+
+      // --- action side ---
+      var actions = document.createElement('div')
+      actions.style.cssText = 'display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0;'
+
+      var resetBtn = document.createElement('button')
+      resetBtn.type = 'button'
+      resetBtn.textContent = 'Reset Password'
+      resetBtn.style.cssText = 'font-size:12px;padding:6px 12px;background:linear-gradient(135deg,#d97706,#b45309);'
+      ;(function (uid) {
+        resetBtn.addEventListener('click', function () {
+          var navBtns = document.querySelectorAll('.nav-item')
+          navBtns.forEach(function (btn) { if (btn.dataset.view === 'change-password') btn.click() })
+          var sel = document.getElementById('reset-student-select')
+          if (sel) {
+            sel.value = uid
+            var newPwInput = document.getElementById('reset-new-pw')
+            if (newPwInput) newPwInput.focus()
+          }
+        })
+      })(u.id)
+
+      actions.appendChild(resetBtn)
+      card.appendChild(info)
+      card.appendChild(actions)
+      accountsWrap.appendChild(card)
+    })
+  }
+
+  if (accountsSearch) {
+    var accT = null
+    accountsSearch.addEventListener('input', function () {
+      clearTimeout(accT)
+      accT = setTimeout(function () { renderAccounts(accountsSearch.value) }, 180)
+    })
+  }
+
+  // ── Populate student dropdown in Change Password tab ─────────────────────
+  function populateStudentSelect() {
+    var sel = document.getElementById('reset-student-select')
+    if (!sel) return
+    var users    = LibraryAuth.loadUsers()
+    var students = users.filter(function (u) { return u.role === 'student' })
+    var current  = sel.value
+    sel.innerHTML = '<option value="">— select a student —</option>'
+    students.forEach(function (u) {
+      var opt = document.createElement('option')
+      opt.value       = u.id
+      opt.textContent = u.name + ' (' + maskEmail(u.email || u.loginId || '') + ')'
+      sel.appendChild(opt)
+    })
+    if (current) sel.value = current
+  }
+
+  // ── Helper: show inline form message ────────────────────────────────────
+  function showMsg(elId, text, type) {
+    var el = document.getElementById(elId)
+    if (!el) return
+    el.textContent   = text
+    el.className     = type
+    el.style.display = 'block'
+    if (type === 'success') setTimeout(function () { el.style.display = 'none' }, 3500)
+  }
+
+  // ── Admin changes their own password ─────────────────────────────────────
+  var adminPwForm = document.getElementById('admin-pw-form')
+  if (adminPwForm) {
+    adminPwForm.addEventListener('submit', function (e) {
+      e.preventDefault()
+      var currentPw = document.getElementById('admin-current-pw').value
+      var newPw     = document.getElementById('admin-new-pw').value.trim()
+      var confirmPw = document.getElementById('admin-confirm-pw').value.trim()
+
+      if (!currentPw || !newPw || !confirmPw) return showMsg('admin-pw-msg', 'Please fill in all fields.', 'error')
+      if (newPw.length < 6)    return showMsg('admin-pw-msg', 'New password must be at least 6 characters.', 'error')
+      if (newPw !== confirmPw) return showMsg('admin-pw-msg', 'New passwords do not match.', 'error')
+
+      var users    = LibraryAuth.loadUsers()
+      var adminIdx = users.findIndex(function (u) { return u.id === user.id })
+      if (adminIdx < 0) return showMsg('admin-pw-msg', 'Admin account not found.', 'error')
+      if (users[adminIdx].password !== currentPw) return showMsg('admin-pw-msg', 'Current password is incorrect.', 'error')
+
+      users[adminIdx].password = newPw
+      LibraryAuth.saveUsers(users)
+      adminPwForm.reset()
+      showMsg('admin-pw-msg', 'Password updated successfully.', 'success')
+    })
+  }
+
+  // ── Admin resets a student's password ────────────────────────────────────
+  var resetPwForm = document.getElementById('reset-pw-form')
+  if (resetPwForm) {
+    resetPwForm.addEventListener('submit', function (e) {
+      e.preventDefault()
+      var studentId = document.getElementById('reset-student-select').value
+      var newPw     = document.getElementById('reset-new-pw').value.trim()
+      var confirmPw = document.getElementById('reset-confirm-pw').value.trim()
+
+      if (!studentId)          return showMsg('reset-pw-msg', 'Please select a student account.', 'error')
+      if (!newPw || !confirmPw) return showMsg('reset-pw-msg', 'Please fill in both password fields.', 'error')
+      if (newPw.length < 6)    return showMsg('reset-pw-msg', 'Password must be at least 6 characters.', 'error')
+      if (newPw !== confirmPw) return showMsg('reset-pw-msg', 'Passwords do not match.', 'error')
+
+      var users      = LibraryAuth.loadUsers()
+      var studentIdx = users.findIndex(function (u) { return u.id === studentId })
+      if (studentIdx < 0) return showMsg('reset-pw-msg', 'Student account not found.', 'error')
+
+      var studentName = users[studentIdx].name || 'Student'
+      users[studentIdx].password = newPw
+      LibraryAuth.saveUsers(users)
+      resetPwForm.reset()
+      showMsg('reset-pw-msg', studentName + "'s password has been reset successfully.", 'success')
+      renderAccounts()
+    })
+  }
+
+  // ── Firebase pull update listeners ────────────────────────────────────────
   window.addEventListener('libraryBooksUpdated', function () {
     loadBooks(); renderTable(); renderRequests()
   })
