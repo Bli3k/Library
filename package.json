@@ -19,8 +19,12 @@
     "files": [
       "main.js",
       "preload.js",
-      "img/**/*",
-      "index.html"
+      "splash.html",
+      "*.html",
+      "*.js",
+      "*.css",
+      "*.xlsx",
+      "img/**/*"
     ],
     "win": {
       "target": [

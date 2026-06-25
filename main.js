@@ -5,7 +5,7 @@ const path = require('path')
 let mainWindow
 let splashWindow
 
-// ── Prevent a second instance from opening ──────────────────────
+// ── Prevent a second instance ────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -18,8 +18,13 @@ if (!gotLock) {
   })
 }
 
-// ── Create splash screen ─────────────────────────────────────────
-function createSplash() {
+// All files are flat in the root folder — just join with __dirname
+function appFile (fileName) {
+  return path.join(__dirname, fileName)
+}
+
+// ── Splash screen ────────────────────────────────────────────────
+function createSplash () {
   splashWindow = new BrowserWindow({
     width: 500,
     height: 340,
@@ -28,38 +33,44 @@ function createSplash() {
     alwaysOnTop: true,
     skipTaskbar: true,
     resizable: false,
-    icon: path.join(__dirname, 'img/logo.ico'),
-    webPreferences: { nodeIntegration: false, contextIsolation: true }
+    // Uses logo.png from your img/ folder as the window icon
+    icon: appFile('img/logo.png'),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
   })
-  splashWindow.loadFile(path.join(__dirname, 'splash.html'))
+  // splash.html lives in the root alongside your other HTML files
+  splashWindow.loadFile(appFile('splash.html'))
   splashWindow.center()
 }
 
-// ── Create main window ───────────────────────────────────────────
-function createMainWindow() {
+// ── Main window ──────────────────────────────────────────────────
+function createMainWindow () {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    show: false,                          // hidden until ready
-    icon: path.join(__dirname, 'img/icon.ico'),
+    show: false,
+    // Uses logo.png from your img/ folder as the window icon
+    icon: appFile('img/logo.png'),
     title: 'BCST Library System',
     webPreferences: {
-      nodeIntegration: false,             // security: no Node in renderer
-      contextIsolation: true,             // security: isolated context
-      preload: path.join(__dirname, 'preload.js'),
-      devTools: false                     // ← disables DevTools for users
+      nodeIntegration: false,
+      contextIsolation: true,
+      webSecurity: false,
+      preload: appFile('preload.js'),
+      devTools: false
     }
   })
 
-  // Remove the default menu bar completely
   Menu.setApplicationMenu(null)
 
-  // Load your app
-  mainWindow.loadFile(path.join(__dirname, 'index.html'))
+  // Load login.html directly — skips the index.html sessionStorage issue
+  mainWindow.loadFile(appFile('login.html'))
 
-  // Show main window and close splash when ready
+  // Close splash and show main window once ready
   mainWindow.once('ready-to-show', () => {
     setTimeout(() => {
       if (splashWindow && !splashWindow.isDestroyed()) {
@@ -67,31 +78,37 @@ function createMainWindow() {
         splashWindow = null
       }
       mainWindow.show()
-      // Uncomment the line below if you want fullscreen by default:
-      // mainWindow.setFullScreen(true)
-    }, 2500) // splash shows for 2.5 seconds minimum
+    }, 2500)
   })
 
-  // Prevent navigation to external URLs inside the app window
+  // Open external http/https links in the system browser
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const appUrl = 'file://'
-    if (!url.startsWith(appUrl)) {
+    if (!url.startsWith('file://')) {
       event.preventDefault()
-      shell.openExternal(url)  // open in browser instead
+      shell.openExternal(url)
+    }
+  })
+
+  // F11 toggles fullscreen
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F11' && input.type === 'keyDown') {
+      mainWindow.setFullScreen(!mainWindow.isFullScreen())
+      event.preventDefault()
     }
   })
 
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
-// ── App ready ────────────────────────────────────────────────────
+// ── App lifecycle ────────────────────────────────────────────────
 app.whenReady().then(() => {
   createSplash()
   createMainWindow()
 
-  // Check for updates after window is ready (only works in production build)
   mainWindow.once('ready-to-show', () => {
-    autoUpdater.checkForUpdatesAndNotify()
+    if (app.isPackaged) {
+      try { autoUpdater.checkForUpdatesAndNotify() } catch (e) {}
+    }
   })
 })
 
@@ -103,10 +120,10 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
 })
 
-// ── Auto-updater events ──────────────────────────────────────────
+// ── Auto-updater ─────────────────────────────────────────────────
 autoUpdater.on('update-available', () => {
-  mainWindow?.webContents.send('update-available')
+  if (mainWindow) mainWindow.webContents.send('update-available')
 })
 autoUpdater.on('update-downloaded', () => {
-  mainWindow?.webContents.send('update-downloaded')
+  if (mainWindow) mainWindow.webContents.send('update-downloaded')
 })
