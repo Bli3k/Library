@@ -12,15 +12,15 @@
   "build": {
     "appId": "com.bcst.library",
     "productName": "BCST Library System",
-    "copyright": "Copyright © 2025 Bohol College of Science and Technology, Inc.",
+    "copyright": "Copyright © 2026 Bohol College of Science and Technology, Inc.",
     "directories": {
       "output": "dist"
     },
     "files": [
       "main.js",
       "preload.js",
-      "assets/**/*",
-      "app/**/*"
+      "img/**/*",
+      "index.html"
     ],
     "win": {
       "target": [

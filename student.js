@@ -232,7 +232,7 @@
 
   // ── Render borrow requests ─────────────────────────────────────────────────
   function renderRequests() {
-    const requests = LibraryAuth.loadRequests().filter(function (r) {
+    var requests = LibraryAuth.loadRequests().filter(function (r) {
       return r.userId === user.id
     })
 
@@ -243,12 +243,65 @@
 
     requests.sort(function (a, b) { return new Date(b.requestedAt) - new Date(a.requestedAt) })
 
-    let html = '<table><thead><tr><th>Book</th><th>Author</th><th>Status</th><th>Requested</th><th>Reviewed</th><th>Admin Notes</th></tr></thead><tbody>'
+    // Count books not yet returned — show a banner if any are overdue
+    var notReturned = requests.filter(function (r) {
+      return r.status === 'approved' && !r.returnedAt
+    })
+    var overdue = notReturned.filter(function (r) {
+      return r.reviewedAt && Math.floor((Date.now() - new Date(r.reviewedAt).getTime()) / 86400000) >= 7
+    })
+
+    var bannerHtml = ''
+    if (overdue.length > 0) {
+      bannerHtml = '<div style="background:#fff8ed;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start;">'
+        + '<span style="font-size:20px;line-height:1;">&#9888;&#65039;</span>'
+        + '<div><div style="font-weight:700;color:#d97706;font-size:13.5px;margin-bottom:3px;">Please Return Your Book' + (overdue.length > 1 ? 's' : '') + '</div>'
+        + '<div style="font-size:13px;color:#92400e;">You have <strong>' + overdue.length + '</strong> book' + (overdue.length > 1 ? 's' : '') + ' that '
+        + (overdue.length > 1 ? 'have' : 'has') + ' been borrowed for 7 or more days. Please return ' + (overdue.length > 1 ? 'them' : 'it') + ' to the library at your earliest convenience.</div>'
+        + '</div></div>'
+    } else if (notReturned.length > 0 && overdue.length === 0) {
+      bannerHtml = '<div style="background:var(--blue-lt);border:1.5px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;">'
+        + '<span style="font-size:18px;">&#128218;</span>'
+        + '<div style="font-size:13px;color:#1e40af;">You currently have <strong>' + notReturned.length + '</strong> borrowed book' + (notReturned.length > 1 ? 's' : '') + '. Please return ' + (notReturned.length > 1 ? 'them' : 'it') + ' when you are done.</div>'
+        + '</div>'
+    }
+
+    var html = bannerHtml
+      + '<table><thead><tr>'
+      + '<th>Book</th><th>Author</th><th>Status</th>'
+      + '<th>Return Status</th><th>Requested</th><th>Reviewed</th><th>Admin Notes</th>'
+      + '</tr></thead><tbody>'
+
     requests.forEach(function (req) {
-      html += '<tr>'
-        + '<td>' + escapeHtml(req.bookTitle) + '</td>'
+      // Return status column
+      var returnCol = '—'
+      if (req.status === 'approved') {
+        if (req.returnedAt) {
+          returnCol = '<span class="badge badge-approved">&#10003; Returned</span>'
+            + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + new Date(req.returnedAt).toLocaleDateString() + '</div>'
+        } else {
+          var daysOut = req.reviewedAt ? Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000) : 0
+          var urgency = daysOut >= 7
+            ? '<span class="badge badge-pending" style="font-size:11px;background:#fff8ed;border-color:#fcd34d;color:#d97706;">&#9888; Please Return (' + daysOut + 'd)</span>'
+            : '<span class="badge badge-pending" style="font-size:11px;">Not Yet Returned</span>'
+          // Show notification dot if admin sent a reminder
+          var notifLine = req.returnNotifiedAt
+            ? '<div style="font-size:10.5px;color:var(--amber);margin-top:2px;">&#128276; Reminder sent by admin</div>'
+            : ''
+          returnCol = urgency + notifLine
+        }
+      }
+
+      // Row highlight if overdue
+      var rowStyle = (req.status === 'approved' && !req.returnedAt && req.reviewedAt
+        && Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000) >= 7)
+        ? ' style="background:#fff8ed;"' : ''
+
+      html += '<tr' + rowStyle + '>'
+        + '<td><strong>' + escapeHtml(req.bookTitle) + '</strong></td>'
         + '<td>' + escapeHtml(req.bookAuthor || '') + '</td>'
         + '<td>' + statusBadge(req.status) + '</td>'
+        + '<td>' + returnCol + '</td>'
         + '<td>' + escapeHtml(new Date(req.requestedAt).toLocaleString()) + '</td>'
         + '<td>' + escapeHtml(req.reviewedAt ? new Date(req.reviewedAt).toLocaleString() : '—') + '</td>'
         + '<td>' + escapeHtml(req.adminNotes || '—') + '</td>'

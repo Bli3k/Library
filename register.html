@@ -48,7 +48,7 @@
           <label>Address <input id="address" required placeholder="Complete home address" autocomplete="street-address" /></label>
           <div class="row">
             <label>Email <input id="email" type="email" required placeholder="you@example.com" autocomplete="email" /></label>
-            <label>Contact Number <input id="contact-number" placeholder="09XX XXX XXXX (optional)" autocomplete="tel" /></label>
+            <label>Contact Number <input id="contact-number" type="tel" required placeholder="09XXXXXXXXX (11 digits)" autocomplete="tel" maxlength="11" pattern="[0-9]{11}" inputmode="numeric" /></label>
           </div>
 
           <div class="section-label">Security</div>

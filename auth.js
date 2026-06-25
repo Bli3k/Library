@@ -216,7 +216,34 @@
       const book = books.find((b) => String(b.id) === String(req.bookId))
       if (!book || getAvailableCopies(book) <= 0) return { ok: false, error: 'No copies available to approve this request.' }
     }
-    requests[idx] = Object.assign({}, req, { status, reviewedAt: new Date().toISOString(), adminNotes: adminNotes || '' })
+    requests[idx] = Object.assign({}, req, {
+      status,
+      reviewedAt: new Date().toISOString(),
+      adminNotes: adminNotes || '',
+      returnedAt: null,
+      returnNotifiedAt: null
+    })
+    saveRequests(requests)
+    return { ok: true, request: requests[idx] }
+  }
+
+  // Mark a borrowed book as returned
+  function markBookReturned(requestId) {
+    const requests = loadRequests()
+    const idx = requests.findIndex(function (r) { return r.id === requestId })
+    if (idx < 0) return { ok: false, error: 'Request not found.' }
+    if (requests[idx].status !== 'approved') return { ok: false, error: 'This request is not approved.' }
+    requests[idx] = Object.assign({}, requests[idx], { returnedAt: new Date().toISOString() })
+    saveRequests(requests)
+    return { ok: true, request: requests[idx] }
+  }
+
+  // Record that the admin sent a return reminder notification to the student
+  function notifyReturn(requestId) {
+    const requests = loadRequests()
+    const idx = requests.findIndex(function (r) { return r.id === requestId })
+    if (idx < 0) return { ok: false, error: 'Request not found.' }
+    requests[idx] = Object.assign({}, requests[idx], { returnNotifiedAt: new Date().toISOString() })
     saveRequests(requests)
     return { ok: true, request: requests[idx] }
   }
@@ -257,6 +284,7 @@
     // borrow helpers
     getAvailableCopies, getApprovedBorrowCount,
     createBorrowRequest, updateBorrowRequest,
+    markBookReturned, notifyReturn,
     ensureDefaultAdmin
   }
 })()

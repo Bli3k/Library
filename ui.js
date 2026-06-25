@@ -32,8 +32,24 @@
       } catch (err) {}
     }
 
+    // ── Contact number input — digits only, max 11 ─────────────────────────────
+    var contactInput = document.getElementById('contact-number')
+    if (contactInput) {
+      contactInput.addEventListener('input', function () {
+        // Strip non-numeric characters as user types
+        var cleaned = this.value.replace(/[^0-9]/g, '')
+        if (cleaned.length > 11) cleaned = cleaned.slice(0, 11)
+        this.value = cleaned
+      })
+      contactInput.addEventListener('keypress', function (e) {
+        // Block non-numeric key presses
+        if (!/[0-9]/.test(e.key)) e.preventDefault()
+      })
+    }
+
     // ── Network / connection status indicator ────────────────────────────────
     // Updates the "Online / Offline" pill in the page header.
+    // Note: the Firebase status pill is handled separately by firebase-sync.js.
     try {
       function updateConnectionUI(online) {
         const status  = document.getElementById('connection-status')

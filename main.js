@@ -31,7 +31,7 @@ function createSplash() {
     icon: path.join(__dirname, 'img/logo.ico'),
     webPreferences: { nodeIntegration: false, contextIsolation: true }
   })
-  splashWindow.loadFile(path.join(__dirname, 'assets/splash.html'))
+  splashWindow.loadFile(path.join(__dirname, 'splash.html'))
   splashWindow.center()
 }
 
@@ -43,7 +43,7 @@ function createMainWindow() {
     minWidth: 900,
     minHeight: 600,
     show: false,                          // hidden until ready
-    icon: path.join(__dirname, 'assets/icon.ico'),
+    icon: path.join(__dirname, 'img/icon.ico'),
     title: 'BCST Library System',
     webPreferences: {
       nodeIntegration: false,             // security: no Node in renderer
@@ -57,7 +57,7 @@ function createMainWindow() {
   Menu.setApplicationMenu(null)
 
   // Load your app
-  mainWindow.loadFile(path.join(__dirname, 'app/index.html'))
+  mainWindow.loadFile(path.join(__dirname, 'index.html'))
 
   // Show main window and close splash when ready
   mainWindow.once('ready-to-show', () => {

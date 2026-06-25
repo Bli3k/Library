@@ -254,54 +254,124 @@
     return '<span class="badge badge-' + status + '">' + escapeHtml(status) + '</span>'
   }
 
+  function returnStatusBadge(req) {
+    if (req.status !== 'approved') return ''
+    if (req.returnedAt) {
+      return '<span class="badge badge-approved" style="font-size:11px;">&#10003; Returned</span>'
+    }
+    var notified = req.returnNotifiedAt
+      ? '<div style="font-size:10.5px;color:var(--amber);margin-top:3px;">Notified: ' + new Date(req.returnNotifiedAt).toLocaleDateString() + '</div>'
+      : ''
+    return '<span class="badge badge-pending" style="font-size:11px;">Not Returned</span>' + notified
+  }
+
   function renderRequests() {
-    const requests = LibraryAuth.loadRequests()
-    const pending  = requests.filter(r => r.status === 'pending')
+    var requests = LibraryAuth.loadRequests()
+    var pending  = requests.filter(function (r) { return r.status === 'pending' })
     pendingCount.textContent = pending.length ? pending.length + ' pending' : ''
-    const navPending = document.getElementById('nav-pending-count')
+    var navPending = document.getElementById('nav-pending-count')
     if (navPending) navPending.textContent = pendingCount.textContent
     updateStats()
     if (requests.length === 0) { requestsWrap.innerHTML = '<p class="muted" style="padding:16px 0;">No borrow requests yet.</p>'; return }
-    const sorted = requests.slice().sort((a, b) => {
-      if (a.status === 'pending' && b.status !== 'pending') return -1
-      if (a.status !== 'pending' && b.status === 'pending') return 1
+
+    // Sort: pending first, then approved-not-returned, then returned/rejected
+    var sorted = requests.slice().sort(function (a, b) {
+      function rank(r) {
+        if (r.status === 'pending') return 0
+        if (r.status === 'approved' && !r.returnedAt) return 1
+        if (r.status === 'approved' && r.returnedAt) return 2
+        return 3
+      }
+      var diff = rank(a) - rank(b)
+      if (diff !== 0) return diff
       return new Date(b.requestedAt) - new Date(a.requestedAt)
     })
-    let html = '<table><thead><tr><th>Student</th><th>Course</th><th>Year / Section</th><th>Contact</th><th>Book</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead><tbody>'
+
+    var html = '<table><thead><tr>'
+      + '<th>Student</th><th>Course</th><th>Year / Section</th>'
+      + '<th>Contact</th><th>Book</th><th>Status</th>'
+      + '<th>Return Status</th><th>Requested</th><th>Actions</th>'
+      + '</tr></thead><tbody>'
+
     sorted.forEach(function (req) {
-      let actions = '—'
+      var actions = '—'
       if (req.status === 'pending') {
         actions = '<button class="btn-link small approve" data-id="' + req.id + '" data-action="approve">Approve</button> '
                + '<button class="btn-link small reject" data-id="' + req.id + '" data-action="reject">Reject</button>'
+      } else if (req.status === 'approved' && !req.returnedAt) {
+        actions = '<button class="btn-link small approve" data-id="' + req.id + '" data-action="mark-returned" style="background:var(--green-lt);border-color:#6ee7b7;color:var(--green-md);">&#10003; Mark Returned</button>'
+               + ' <button class="btn-link small" data-id="' + req.id + '" data-action="notify-return" style="background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);">&#128276; Notify</button>'
+      } else if (req.status === 'approved' && req.returnedAt) {
+        actions = '<span class="muted" style="font-size:12px;">Returned ' + new Date(req.returnedAt).toLocaleDateString() + '</span>'
       }
-      html += '<tr><td>' + escapeHtml(req.userName) + '</td>'
+
+      // Row highlight for overdue (approved, not returned, approved > 7 days ago)
+      var rowStyle = ''
+      if (req.status === 'approved' && !req.returnedAt && req.reviewedAt) {
+        var daysBorrowed = Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000)
+        if (daysBorrowed >= 7) rowStyle = ' style="background:#fff8ed;"'
+      }
+
+      html += '<tr' + rowStyle + '>'
+           + '<td>' + escapeHtml(req.userName) + '</td>'
            + '<td>' + escapeHtml(req.userCourse || '') + '</td>'
            + '<td>' + escapeHtml((req.userYear || '') + ' / ' + (req.userSection || '')) + '</td>'
            + '<td>' + escapeHtml(req.userContact || '') + '</td>'
            + '<td>' + escapeHtml(req.bookTitle) + '</td>'
            + '<td>' + statusBadge(req.status) + '</td>'
+           + '<td>' + returnStatusBadge(req) + '</td>'
            + '<td>' + escapeHtml(new Date(req.requestedAt).toLocaleString()) + '</td>'
-           + '<td class="center">' + actions + '</td></tr>'
+           + '<td class="center">' + actions + '</td>'
+           + '</tr>'
     })
     html += '</tbody></table>'
     requestsWrap.innerHTML = html
-    requestsWrap.querySelectorAll('button[data-action="approve"]').forEach(btn => btn.addEventListener('click', onApprove))
-    requestsWrap.querySelectorAll('button[data-action="reject"]').forEach(btn => btn.addEventListener('click', onReject))
+
+    requestsWrap.querySelectorAll('button[data-action="approve"]').forEach(function (btn) { btn.addEventListener('click', onApprove) })
+    requestsWrap.querySelectorAll('button[data-action="reject"]').forEach(function (btn) { btn.addEventListener('click', onReject) })
+    requestsWrap.querySelectorAll('button[data-action="mark-returned"]').forEach(function (btn) { btn.addEventListener('click', onMarkReturned) })
+    requestsWrap.querySelectorAll('button[data-action="notify-return"]').forEach(function (btn) { btn.addEventListener('click', onNotifyReturn) })
   }
 
   function onApprove(e) {
-    const id = e.currentTarget.dataset.id
-    const notes = prompt('Optional note for the student (leave blank to skip):') || ''
-    const result = LibraryAuth.updateBorrowRequest(id, 'approved', notes)
+    var id = e.currentTarget.dataset.id
+    var notes = prompt('Optional note for the student (leave blank to skip):') || ''
+    var result = LibraryAuth.updateBorrowRequest(id, 'approved', notes)
     if (!result.ok) { alert(result.error); return }
     renderTable(); renderRequests()
   }
 
   function onReject(e) {
-    const id = e.currentTarget.dataset.id
-    const notes = prompt('Reason for rejection (optional):') || ''
-    const result = LibraryAuth.updateBorrowRequest(id, 'rejected', notes)
+    var id = e.currentTarget.dataset.id
+    var notes = prompt('Reason for rejection (optional):') || ''
+    var result = LibraryAuth.updateBorrowRequest(id, 'rejected', notes)
     if (!result.ok) { alert(result.error); return }
+    renderRequests()
+  }
+
+  function onMarkReturned(e) {
+    var id = e.currentTarget.dataset.id
+    if (!confirm('Mark this book as returned? This will free up one copy.')) return
+    var result = LibraryAuth.markBookReturned(id)
+    if (!result.ok) { alert(result.error); return }
+    renderTable(); renderRequests()
+  }
+
+  function onNotifyReturn(e) {
+    var id = e.currentTarget.dataset.id
+    var requests = LibraryAuth.loadRequests()
+    var req = requests.find(function (r) { return r.id === id })
+    if (!req) return
+    // Show the admin a ready-made message to relay to the student
+    var daysOut = req.reviewedAt
+      ? Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000)
+      : 0
+    var msg = 'Reminder sent to ' + req.userName + '\n\n'
+      + 'Message to relay:\n'
+      + '"Hi ' + req.userName + ', this is a reminder from the BCST Library to please return the book \"' + req.bookTitle + '\" that you borrowed ' + daysOut + ' day(s) ago. '
+      + 'Please return it at your earliest convenience. Thank you!"'
+    alert(msg)
+    LibraryAuth.notifyReturn(id)
     renderRequests()
   }
 

@@ -23,6 +23,15 @@
       return
     }
 
+    // Contact number must be exactly 11 digits
+    var contactNum = document.getElementById('contact-number').value.trim()
+    if (!/^[0-9]{11}$/.test(contactNum)) {
+      errorEl.textContent = 'Contact number must be exactly 11 digits (e.g. 09171234567).'
+      errorEl.hidden      = false
+      document.getElementById('contact-number').focus()
+      return
+    }
+
     const result = LibraryAuth.register({
       name:          document.getElementById('name').value,
       age:           document.getElementById('age').value,
