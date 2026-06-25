@@ -51,6 +51,6 @@
     }
 
     alert('Registration successful! You can now sign in with your email.')
-    window.location.href = 'login.html'
+    window.location.replace('login.html')
   })
 })()

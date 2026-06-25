@@ -338,7 +338,14 @@
     var notes = prompt('Optional note for the student (leave blank to skip):') || ''
     var result = LibraryAuth.updateBorrowRequest(id, 'approved', notes)
     if (!result.ok) { alert(result.error); return }
-    renderTable(); renderRequests()
+    renderTable()
+    renderRequests()
+
+    if (window.LibraryFirebase) {
+      LibraryFirebase.syncRequests(
+        LibraryAuth.loadRequests()
+      )
+    }
   }
 
   function onReject(e) {
@@ -347,6 +354,12 @@
     var result = LibraryAuth.updateBorrowRequest(id, 'rejected', notes)
     if (!result.ok) { alert(result.error); return }
     renderRequests()
+
+    if (window.LibraryFirebase) {
+      LibraryFirebase.syncRequests(
+        LibraryAuth.loadRequests()
+      )
+    }
   }
 
   function onMarkReturned(e) {
@@ -354,7 +367,14 @@
     if (!confirm('Mark this book as returned? This will free up one copy.')) return
     var result = LibraryAuth.markBookReturned(id)
     if (!result.ok) { alert(result.error); return }
-    renderTable(); renderRequests()
+    renderTable()
+    renderRequests()
+
+    if (window.LibraryFirebase) {
+      LibraryFirebase.syncRequests(
+        LibraryAuth.loadRequests()
+      )
+    }
   }
 
   function onNotifyReturn(e) {
@@ -373,6 +393,12 @@
     alert(msg)
     LibraryAuth.notifyReturn(id)
     renderRequests()
+    
+    if (window.LibraryFirebase) {
+      LibraryFirebase.syncRequests(
+        LibraryAuth.loadRequests()
+      )
+    }
   }
 
   function onEdit(e) {

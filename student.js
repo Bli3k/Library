@@ -317,11 +317,22 @@
     if (!confirm('Send a borrow request to the admin for this book?')) return
 
     const result = LibraryAuth.createBorrowRequest(user.id, bookId)
-    if (!result.ok) { alert(result.error); return }
+
+    if (!result.ok) {
+      alert(result.error);
+      return;
+    }
+
+    // Push immediately to Firebase
+    if (window.LibraryFirebase) {
+      LibraryFirebase.syncRequests(
+        LibraryAuth.loadRequests()
+      )
+    }
 
     alert('Borrow request sent! The admin will review it shortly.')
-    renderBooks()
-    renderRequests()
+        renderBooks()
+        renderRequests()
   }
 
   // ── Auto-import Book1.xlsx if needed (same logic as admin) ────────────────

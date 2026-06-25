@@ -55,23 +55,32 @@
     try {
       if (session) {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-        localStorage.setItem('library_active_session_' + session.userId, session.sessionId)
-        try { sessionStorage.setItem('library_current_session_id', session.sessionId) } catch (e) {}
+        localStorage.setItem(
+          'library_active_session_' + session.userId,
+          session.sessionId
+        )
       } else {
         const old = loadSession()
+  
         if (old && old.userId) {
           try {
             const key = 'library_active_session_' + old.userId
             const active = localStorage.getItem(key)
-            if (active && active === old.sessionId) localStorage.removeItem(key)
+  
+            if (active && active === old.sessionId) {
+              localStorage.removeItem(key)
+            }
           } catch (e) {}
         }
+  
         localStorage.removeItem(SESSION_KEY)
-        try { sessionStorage.removeItem('library_current_session_id') } catch (e) {}
       }
     } catch (e) {
-      if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-      else localStorage.removeItem(SESSION_KEY)
+      if (session) {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+      } else {
+        localStorage.removeItem(SESSION_KEY)
+      }
     }
   }
 
@@ -148,23 +157,26 @@
     return { ok: true, user, session }
   }
 
-  function logout() { saveSession(null) }
+  function logout() {
+    saveSession(null)
+  }
 
   function getCurrentUser() {
     const session = loadSession()
     if (!session) return null
     const users = loadUsers()
+    // REMOVE the sessionStorage cross-check — it breaks in Electron file:// navigation
+    // Just verify the active session key matches
     try {
-      const clientSid = sessionStorage.getItem('library_current_session_id')
       const activeSid = localStorage.getItem('library_active_session_' + session.userId)
-      if (!clientSid || !activeSid || clientSid !== session.sessionId || activeSid !== session.sessionId) return null
+      if (!activeSid || activeSid !== session.sessionId) return null
     } catch (e) {}
     return users.find((u) => u.id === session.userId) || null
   }
 
   function requireAuth(allowedRoles) {
     const user = getCurrentUser()
-    if (!user) { window.location.href = 'login.html'; return null }
+    if (!user) { window.location.replace('login.html'); return null }
     if (allowedRoles && !allowedRoles.includes(user.role)) {
       window.location.href = user.role === 'admin' ? 'admin.html' : 'student.html'; return null
     }
@@ -250,24 +262,27 @@
 
   ensureDefaultAdmin()
 
-  window.addEventListener('storage', function (e) {
+  window.addEventListener('storage', function () {
     try {
-      const clientSid = sessionStorage.getItem('library_current_session_id')
       const current = loadSession()
-      if (!current) {
-        if (clientSid) {
-          saveSession(null)
-          try { alert('You have been logged out (session ended in another tab).') } catch (er) {}
-          try { window.location.href = 'login.html' } catch (er) {}
-        }
-        return
-      }
+  
+      if (!current) return
+  
       const activeKey = 'library_active_session_' + current.userId
       const activeSid = localStorage.getItem(activeKey)
-      if (clientSid && activeSid && clientSid !== activeSid) {
+  
+      if (!activeSid || activeSid !== current.sessionId) {
         saveSession(null)
-        try { alert('Your account was signed in from another tab. You have been logged out.') } catch (er) {}
-        try { window.location.href = 'login.html' } catch (er) {}
+  
+        try {
+          alert(
+            'Your account was signed in elsewhere. You have been logged out.'
+          )
+        } catch (e) {}
+  
+        try {
+          window.location.replace = 'login.html'
+        } catch (e) {}
       }
     } catch (err) {}
   })

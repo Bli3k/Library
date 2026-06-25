@@ -93,6 +93,7 @@
     const getDocs         = firestoreModule.getDocs
     const writeBatch      = firestoreModule.writeBatch
     const serverTimestamp = firestoreModule.serverTimestamp
+    const onSnapshot      = firestoreModule.onSnapshot
 
     // Re-use existing Firebase app if already initialised (e.g. script loaded twice)
     const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
@@ -336,6 +337,21 @@
     await Promise.all([pullBooks(), pullRequests()])
     await syncAll()
     updateFirebaseStatus('synced')
+    
+    // REALTIME BOOKS
+    onSnapshot(collection(db, 'books'), function (snapshot) {
+      if (!snapshot.metadata.hasPendingWrites) {
+        pullBooks()
+      }
+    })
+    
+    // REALTIME BORROW REQUESTS
+    onSnapshot(collection(db, 'borrowRequests'), function (snapshot) {
+      if (!snapshot.metadata.hasPendingWrites) {
+        pullRequests()
+      }
+    })
+    
     startPeriodicSync()
 
     // Expose API so auth.js, admin.js, student.js can trigger syncs on demand

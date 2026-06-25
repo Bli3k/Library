@@ -14,12 +14,12 @@
       })
     }
 
-    // ── Auto-load sample Excel on first admin visit ───────────────────────────
-    // Fires the Load Sample button once automatically so the demo works out of
-    // the box without the admin needing to import anything manually.
+    
+    const page =
+      window.location.pathname.split('/').pop()
+
     const isAdminPage =
-      window.location.pathname.endsWith('/admin.html') ||
-      window.location.pathname.endsWith('admin.html')
+      page === 'admin.html'
 
     if (isAdminPage) {
       try {
