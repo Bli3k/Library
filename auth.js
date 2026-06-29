@@ -5,6 +5,10 @@
   const REQUESTS_KEY = 'library_borrow_requests_v1'
   const BOOKS_KEY = 'library_books_v1'
   const PW_RESET_KEY = 'library_pw_resets_v1'
+  const DELETED_REQUESTS_KEY = 'library_deleted_borrow_requests_v1'
+  const DELETED_BOOKS_KEY = 'library_deleted_books_v1'
+  const DELETED_PW_RESET_KEY = 'library_deleted_pw_resets_v1'
+  const DELETE_TOMBSTONE_TTL = 30 * 24 * 60 * 60 * 1000
 
   // ── Firebase SDK (loaded via CDN modules in firebase-sync.js) ──────────────
   // Firebase is optional; if window.LibraryFirebase is defined, we'll sync to it.
@@ -81,6 +85,54 @@
     catch (e) { return [] }
   }
 
+  function loadDeletedMap(key) {
+    try {
+      var raw = localStorage.getItem(key)
+      var parsed = raw ? JSON.parse(raw) : {}
+      var now = Date.now()
+      var changed = false
+      var map = {}
+      if (Array.isArray(parsed)) {
+        parsed.forEach(function (id) { if (id) map[String(id)] = now })
+        changed = parsed.length > 0
+      } else if (parsed && typeof parsed === 'object') {
+        Object.keys(parsed).forEach(function (id) {
+          var ts = Number(parsed[id]) || now
+          if (now - ts <= DELETE_TOMBSTONE_TTL) map[id] = ts
+          else changed = true
+        })
+      }
+      if (changed) localStorage.setItem(key, JSON.stringify(map))
+      return map
+    } catch (e) { return {} }
+  }
+
+  function getDeletedIds(key) {
+    return Object.keys(loadDeletedMap(key))
+  }
+
+  function rememberDeleted(key, id) {
+    if (!id) return
+    var map = loadDeletedMap(key)
+    map[String(id)] = Date.now()
+    try { localStorage.setItem(key, JSON.stringify(map)) } catch (e) {}
+  }
+
+  function flushPendingDeletes() {
+    try {
+      if (!window.LibraryFirebase) return
+      getDeletedIds(DELETED_REQUESTS_KEY).forEach(function (id) {
+        if (window.LibraryFirebase.deleteRequest) window.LibraryFirebase.deleteRequest(id)
+      })
+      getDeletedIds(DELETED_BOOKS_KEY).forEach(function (id) {
+        if (window.LibraryFirebase.deleteBook) window.LibraryFirebase.deleteBook(id)
+      })
+      getDeletedIds(DELETED_PW_RESET_KEY).forEach(function (id) {
+        if (window.LibraryFirebase.deletePwReset) window.LibraryFirebase.deletePwReset(id)
+      })
+    } catch (e) {}
+  }
+
   function saveRequests(requests) {
     localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests))
     try {
@@ -108,7 +160,7 @@
     const users = loadUsers()
     const idx = users.findIndex((u) => u.loginId === 'admin' && u.role === 'admin')
     if (idx >= 0) {
-      if (!users[idx].password || users[idx].password !== 'admin123') {
+      if (!users[idx].password) {
         users[idx].password = 'admin123'; saveUsers(users)
       }
       return
@@ -283,6 +335,20 @@
     return { ok: true }
   }
 
+  function deleteBook(bookId) {
+    var books = loadBooks()
+    var filtered = books.filter(function (b) { return String(b.id) !== String(bookId) })
+    if (filtered.length === books.length) return { ok: false, error: 'Book not found.' }
+    rememberDeleted(DELETED_BOOKS_KEY, bookId)
+    localStorage.setItem(BOOKS_KEY, JSON.stringify(filtered))
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deleteBook) {
+        window.LibraryFirebase.deleteBook(bookId)
+      }
+    } catch (e) {}
+    return { ok: true }
+  }
+
   // ── Password reset requests ──────────────────────────────────────────────
   function loadPwResets() {
     try { var raw = localStorage.getItem(PW_RESET_KEY); return raw ? JSON.parse(raw) : [] }
@@ -291,6 +357,11 @@
 
   function savePwResets(resets) {
     localStorage.setItem(PW_RESET_KEY, JSON.stringify(resets))
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.syncPwResets) {
+        window.LibraryFirebase.syncPwResets(resets)
+      }
+    } catch (e) {}
   }
 
   // Student submits a forgot-password request
@@ -342,7 +413,13 @@
   function deletePasswordResetRequest(resetId) {
     var resets  = loadPwResets()
     var filtered = resets.filter(function (r) { return r.id !== resetId })
+    rememberDeleted(DELETED_PW_RESET_KEY, resetId)
     savePwResets(filtered)
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deletePwReset) {
+        window.LibraryFirebase.deletePwReset(resetId)
+      }
+    } catch (e) {}
     return { ok: true }
   }
 
@@ -368,6 +445,7 @@
     var requests = loadRequests()
     var idx      = requests.findIndex(function (r) { return r.id === requestId })
     if (idx < 0) return { ok: false, error: 'Request not found.' }
+    rememberDeleted(DELETED_REQUESTS_KEY, requestId)
     requests.splice(idx, 1)
     saveRequests(requests)
     try {
@@ -402,8 +480,21 @@
     } catch (err) {}
   })
 
+  window.addEventListener('libraryFirebaseReady', function () {
+    flushPendingDeletes()
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.syncPwResets) {
+        window.LibraryFirebase.syncPwResets(loadPwResets())
+      }
+      if (window.LibraryFirebase && window.LibraryFirebase.syncUsers) {
+        window.LibraryFirebase.syncUsers(loadUsers())
+      }
+    } catch (e) {}
+  })
+
   window.LibraryAuth = {
-    USERS_KEY, SESSION_KEY, REQUESTS_KEY, BOOKS_KEY,
+    USERS_KEY, SESSION_KEY, REQUESTS_KEY, BOOKS_KEY, PW_RESET_KEY,
+    DELETED_REQUESTS_KEY, DELETED_BOOKS_KEY, DELETED_PW_RESET_KEY,
     // data loaders — all exposed so firebase-sync.js can call loadUsers()
     loadUsers, saveUsers,
     loadSession,
@@ -415,9 +506,10 @@
     getAvailableCopies, getApprovedBorrowCount,
     createBorrowRequest, updateBorrowRequest,
     markBookReturned, notifyReturn,
-    deleteUser, deleteBorrowRequest,
+    deleteUser, deleteBorrowRequest, deleteBook,
     loadPwResets, savePwResets,
     createPasswordResetRequest, resolvePasswordResetRequest, deletePasswordResetRequest,
+    getDeletedIds, rememberDeleted, flushPendingDeletes,
     ensureDefaultAdmin
   }
 })()

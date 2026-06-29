@@ -90,7 +90,7 @@
           map.set(key, Object.assign({}, b))
         } else {
           const existing = map.get(key)
-          existing.copies = (Number(existing.copies) || 0) + (Number(b.copies) || 0)
+          existing.copies = Math.max(Number(existing.copies) || 0, Number(b.copies) || 0, 1)
           if (!existing.title  && b.title)    existing.title    = b.title
           if (!existing.author && b.author)   existing.author   = b.author
           if (!existing.isbn   && b.isbn)     existing.isbn     = b.isbn
@@ -339,18 +339,22 @@
 
   function onApprove(e) {
     var id = e.currentTarget.dataset.id
-    var notes = prompt('Optional note for the student (leave blank to skip):') || ''
-    var result = LibraryAuth.updateBorrowRequest(id, 'approved', notes)
+    if (!confirmAction('Approve this borrow request?')) return
+    var result = LibraryAuth.updateBorrowRequest(id, 'approved', '')
     if (!result.ok) { alert(result.error); return }
     renderTable(); renderRequests()
   }
 
   function onReject(e) {
     var id = e.currentTarget.dataset.id
-    var notes = prompt('Reason for rejection (optional):') || ''
-    var result = LibraryAuth.updateBorrowRequest(id, 'rejected', notes)
+    if (!confirmAction('Reject this borrow request?')) return
+    var result = LibraryAuth.updateBorrowRequest(id, 'rejected', '')
     if (!result.ok) { alert(result.error); return }
     renderRequests()
+  }
+
+  function confirmAction(message) {
+    try { return window.confirm(message) } catch (e) { return true }
   }
 
   function onMarkReturned(e) {
@@ -384,10 +388,6 @@
     if (!confirm('Delete this request permanently? This cannot be undone.')) return
     var result = LibraryAuth.deleteBorrowRequest(id)
     if (!result.ok) { alert(result.error); return }
-    // Also delete from Firestore
-    if (window.LibraryFirebase && window.LibraryFirebase.deleteRequest) {
-      window.LibraryFirebase.deleteRequest(id)
-    }
     renderRequests()
     renderTable()
   }
@@ -411,8 +411,13 @@
   function onDelete(e) {
     const id = e.currentTarget.dataset.id
     if (!confirm('Delete this book?')) return
-    books = books.filter(x => String(x.id) !== String(id))
-    saveBooks(); updateAdminCategoryOptions(); renderTable()
+    var result = LibraryAuth.deleteBook ? LibraryAuth.deleteBook(id) : null
+    if (result && !result.ok) { alert(result.error); return }
+    if (!result) {
+      books = books.filter(x => String(x.id) !== String(id))
+      saveBooks()
+    }
+    loadBooks(); updateAdminCategoryOptions(); renderTable()
   }
 
   form.addEventListener('submit', function (evt) {
@@ -1002,12 +1007,13 @@
   window.addEventListener('libraryRequestsUpdated', function () {
     renderRequests()
   })
+  window.addEventListener('libraryPwResetsUpdated', function () {
+    renderPwResets()
+  })
 
   loadBooks()
   try { dedupeStoredBooks() } catch (e) {}
-  maybeAutoImportBook1().then(function () {
-    loadBooks(); renderTable(); renderRequests(); renderPwResets(); initAdminNav()
-  })
+  renderTable(); renderRequests(); renderPwResets(); initAdminNav()
 
   window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
 })()

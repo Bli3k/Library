@@ -69,6 +69,20 @@
     return clean
   }
 
+  function readDeletedIdSet(key) {
+    var ids = new Set()
+    try {
+      var raw = localStorage.getItem(key)
+      var parsed = raw ? JSON.parse(raw) : {}
+      if (Array.isArray(parsed)) {
+        parsed.forEach(function (id) { if (id) ids.add(String(id)) })
+      } else if (parsed && typeof parsed === 'object') {
+        Object.keys(parsed).forEach(function (id) { ids.add(String(id)) })
+      }
+    } catch (e) {}
+    return ids
+  }
+
   // Splits large arrays into chunks to stay under Firestore's 500-op batch limit
   async function commitInChunks(db, items, writeBatchFn, buildFn, chunkSize) {
     chunkSize = chunkSize || 400
@@ -141,7 +155,28 @@
     }
     var syncRequests = debounce(syncRequestsRaw, 1200)
 
-    // ── SYNC USERS (no passwords, no admin) ─────────────────────────────────
+    // Sync forgot-password requests so the admin sees them on every app.
+    var syncPwResetsRaw = async function (resets) {
+      if (!Array.isArray(resets) || resets.length === 0) return
+      try {
+        var valid = resets.filter(function (r) { return r && r.id })
+        await commitInChunks(db, valid, writeBatch, function (batch, r) {
+          var ref  = doc(collection(db, 'pwResetRequests'), String(r.id))
+          var data = Object.assign(sanitize(r), {
+            _clientToken: CLIENT_TOKEN,
+            _updatedAt:   serverTimestamp()
+          })
+          batch.set(ref, data, { merge: true })
+        })
+        updateFirebaseStatus('synced')
+      } catch (e) {
+        console.warn('[Firebase] syncPwResets error:', e)
+        updateFirebaseStatus('error')
+      }
+    }
+    var syncPwResets = debounce(syncPwResetsRaw, 1200)
+
+    // Sync student accounts so desktop and web app instances share logins.
     var syncUsersRaw = async function (users) {
       if (!Array.isArray(users)) return
       try {
@@ -150,6 +185,7 @@
           .map(function (u) {
             return {
               id: u.id, name: u.name || '', role: u.role || 'student',
+              loginId: u.loginId || u.email || '', password: u.password || '',
               email: u.email || '', courseStrand: u.courseStrand || '',
               year: u.year || '', section: u.section || '',
               contactNumber: u.contactNumber || '', createdAt: u.createdAt || '',
@@ -189,13 +225,44 @@
       }
     }
 
+    async function deleteBook(bookId) {
+      try {
+        await deleteDoc(doc(collection(db, 'books'), String(bookId)))
+        console.log('[Firebase] Deleted book:', bookId)
+      } catch (e) {
+        console.warn('[Firebase] deleteBook error:', e)
+      }
+    }
+
+    async function deletePwReset(resetId) {
+      try {
+        await deleteDoc(doc(collection(db, 'pwResetRequests'), String(resetId)))
+        console.log('[Firebase] Deleted password reset request:', resetId)
+      } catch (e) {
+        console.warn('[Firebase] deletePwReset error:', e)
+      }
+    }
+
+    async function flushDeletedDocs() {
+      try {
+        var tasks = []
+        readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY).forEach(function (id) { tasks.push(deleteBook(id)) })
+        readDeletedIdSet(LibraryAuth.DELETED_REQUESTS_KEY).forEach(function (id) { tasks.push(deleteRequest(id)) })
+        readDeletedIdSet(LibraryAuth.DELETED_PW_RESET_KEY).forEach(function (id) { tasks.push(deletePwReset(id)) })
+        await Promise.all(tasks)
+      } catch (e) { console.warn('[Firebase] flushDeletedDocs error:', e) }
+    }
+
     // ── PULL BOOKS ──────────────────────────────────────────────────────────
     async function pullBooks() {
       try {
         var snap = await getDocs(collection(db, 'books'))
         if (snap.empty) return
+        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY)
         var remoteBooks = []
-        snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+        snap.forEach(function (d) {
+          if (!deletedIds.has(String(d.id))) remoteBooks.push(stripInternalFields(d.data()))
+        })
         var localBooks = LibraryAuth.loadBooks()
         var localMap   = new Map(localBooks.map(function (b) { return [String(b.id), b] }))
         var changed    = false
@@ -227,8 +294,11 @@
       try {
         var snap = await getDocs(collection(db, 'borrowRequests'))
         if (snap.empty) return
+        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_REQUESTS_KEY)
         var remoteReqs = []
-        snap.forEach(function (d) { remoteReqs.push(stripInternalFields(d.data())) })
+        snap.forEach(function (d) {
+          if (!deletedIds.has(String(d.id))) remoteReqs.push(stripInternalFields(d.data()))
+        })
         var localReqs = LibraryAuth.loadRequests()
         var localMap  = new Map(localReqs.map(function (r) { return [String(r.id), r] }))
         var changed   = false
@@ -253,6 +323,39 @@
       } catch (e) { console.warn('[Firebase] pullRequests error:', e) }
     }
 
+    async function pullPwResets() {
+      try {
+        var snap = await getDocs(collection(db, 'pwResetRequests'))
+        if (snap.empty) return
+        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_PW_RESET_KEY)
+        var remoteResets = []
+        snap.forEach(function (d) {
+          if (!deletedIds.has(String(d.id))) remoteResets.push(stripInternalFields(d.data()))
+        })
+        var localResets = LibraryAuth.loadPwResets ? LibraryAuth.loadPwResets() : []
+        var localMap = new Map(localResets.map(function (r) { return [String(r.id), r] }))
+        var changed = false
+        remoteResets.forEach(function (rr) {
+          if (!rr || !rr.id) return
+          var key = String(rr.id)
+          var local = localMap.get(key)
+          if (!local) {
+            localMap.set(key, rr); changed = true
+          } else if (rr.status !== local.status) {
+            localMap.set(key, rr); changed = true
+          } else if (rr.resolvedAt && local.resolvedAt) {
+            var rt = new Date(rr.resolvedAt).getTime()
+            var lt = new Date(local.resolvedAt).getTime()
+            if (!isNaN(rt) && !isNaN(lt) && rt > lt) { localMap.set(key, rr); changed = true }
+          }
+        })
+        if (changed) {
+          localStorage.setItem(LibraryAuth.PW_RESET_KEY, JSON.stringify(Array.from(localMap.values())))
+          window.dispatchEvent(new CustomEvent('libraryPwResetsUpdated'))
+        }
+      } catch (e) { console.warn('[Firebase] pullPwResets error:', e) }
+    }
+
     // ── PULL USERS — detect deleted accounts ────────────────────────────────
     // If a user was deleted from Firestore by the admin on another device,
     // remove them from localStorage so they don't come back
@@ -260,19 +363,44 @@
       try {
         var snap = await getDocs(collection(db, 'users'))
         var remoteIds = new Set()
-        snap.forEach(function (d) { remoteIds.add(d.id) })
+        var remoteUsers = []
+        snap.forEach(function (d) {
+          remoteIds.add(d.id)
+          var data = stripInternalFields(d.data())
+          data.id = data.id || d.id
+          remoteUsers.push(data)
+        })
         var localUsers   = LibraryAuth.loadUsers()
-        var students     = localUsers.filter(function (u) { return u.role === 'student' })
         var admins       = localUsers.filter(function (u) { return u.role !== 'student' })
+        var localMap     = new Map(localUsers.filter(function (u) { return u.role === 'student' }).map(function (u) { return [String(u.id), u] }))
+        var changed      = false
+        remoteUsers.forEach(function (ru) {
+          if (!ru || !ru.id || ru.role === 'admin') return
+          var key = String(ru.id)
+          var local = localMap.get(key)
+          if (!local) {
+            localMap.set(key, ru)
+            changed = true
+          } else {
+            Object.keys(ru).forEach(function (k) {
+              if (k === 'id' || k === 'role') return
+              if (ru[k] !== undefined && ru[k] !== null && String(ru[k]).trim() !== '' && local[k] !== ru[k]) {
+                local[k] = ru[k]
+                changed = true
+              }
+            })
+          }
+        })
+        var students = Array.from(localMap.values())
         // Only keep students that still exist in Firestore
         // (if Firestore is empty, skip — avoids wiping on first load)
         if (remoteIds.size === 0) return
         var kept    = students.filter(function (u) { return remoteIds.has(String(u.id)) })
         var removed = students.length - kept.length
-        if (removed > 0) {
+        if (removed > 0 || changed) {
           var merged = admins.concat(kept)
           localStorage.setItem(LibraryAuth.USERS_KEY, JSON.stringify(merged))
-          console.log('[Firebase] pullUsers: removed', removed, 'deleted accounts from localStorage')
+          if (removed > 0) console.log('[Firebase] pullUsers: removed', removed, 'deleted accounts from localStorage')
           window.dispatchEvent(new CustomEvent('libraryUsersUpdated'))
         }
       } catch (e) { console.warn('[Firebase] pullUsers error:', e) }
@@ -284,7 +412,8 @@
         var books    = LibraryAuth.loadBooks()
         var requests = LibraryAuth.loadRequests()
         var users    = LibraryAuth.loadUsers ? LibraryAuth.loadUsers() : []
-        await Promise.all([syncBooksRaw(books), syncRequestsRaw(requests), syncUsersRaw(users)])
+        var resets   = LibraryAuth.loadPwResets ? LibraryAuth.loadPwResets() : []
+        await Promise.all([syncBooksRaw(books), syncRequestsRaw(requests), syncUsersRaw(users), syncPwResetsRaw(resets)])
       } catch (e) { console.warn('[Firebase] syncAll error:', e) }
     }
 
@@ -295,7 +424,7 @@
       periodicSyncInterval = setInterval(async function () {
         if (!navigator.onLine) return
         try {
-          await Promise.all([pullBooks(), pullRequests(), pullUsers()])
+          await Promise.all([pullBooks(), pullRequests(), pullUsers(), pullPwResets()])
         } catch (e) { console.warn('[Firebase] Periodic sync error:', e) }
       }, 5 * 60 * 1000)
     }
@@ -304,7 +433,7 @@
     window.addEventListener('online', async function () {
       updateFirebaseStatus('connecting')
       try {
-        await Promise.all([pullBooks(), pullRequests(), pullUsers()])
+        await Promise.all([pullBooks(), pullRequests(), pullUsers(), pullPwResets()])
         await syncAll()
         updateFirebaseStatus('synced')
       } catch (e) { updateFirebaseStatus('error') }
@@ -312,7 +441,8 @@
     window.addEventListener('offline', function () { updateFirebaseStatus('offline') })
 
     // ── INITIAL LOAD ──────────────────────────────────────────────────────────
-    await Promise.all([pullBooks(), pullRequests(), pullUsers()])
+    await flushDeletedDocs()
+    await Promise.all([pullBooks(), pullRequests(), pullUsers(), pullPwResets()])
     await syncAll()
     updateFirebaseStatus('synced')
 
@@ -323,6 +453,9 @@
     onSnapshot(collection(db, 'borrowRequests'), function (snap) {
       if (!snap.metadata.hasPendingWrites) pullRequests()
     })
+    onSnapshot(collection(db, 'pwResetRequests'), function (snap) {
+      if (!snap.metadata.hasPendingWrites) pullPwResets()
+    })
     onSnapshot(collection(db, 'users'), function (snap) {
       if (!snap.metadata.hasPendingWrites) pullUsers()
     })
@@ -330,11 +463,12 @@
     startPeriodicSync()
 
     window.LibraryFirebase = {
-      syncBooks, syncRequests, syncUsers, syncAll,
-      pullBooks, pullRequests, pullUsers,
-      deleteUser, deleteRequest,
+      syncBooks, syncRequests, syncUsers, syncPwResets, syncAll,
+      pullBooks, pullRequests, pullUsers, pullPwResets,
+      deleteUser, deleteRequest, deleteBook, deletePwReset,
       db
     }
+    window.dispatchEvent(new CustomEvent('libraryFirebaseReady'))
 
     console.log('[Firebase] Ready \u2713')
 

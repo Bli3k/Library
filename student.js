@@ -446,14 +446,8 @@
   })
 
   // ── Initial render ─────────────────────────────────────────────────────────
-  maybeAutoImportBook1().then(function () {
-    renderBooks()
-    renderRequests()
-    initStudentNav()
-  }).catch(function () {
-    renderBooks()
-    renderRequests()
-    initStudentNav()
-  })
+  renderBooks()
+  renderRequests()
+  initStudentNav()
 
 })()
