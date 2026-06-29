@@ -251,7 +251,8 @@
   }
 
   function getApprovedBorrowCount(bookId, requests) {
-    return requests.filter((r) => String(r.bookId) === String(bookId) && r.status === 'approved').length
+    // Only count approved requests that have NOT been returned yet
+    return requests.filter((r) => String(r.bookId) === String(bookId) && r.status === 'approved' && !r.returnedAt).length
   }
 
   function getAvailableCopies(book) {

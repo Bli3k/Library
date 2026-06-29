@@ -126,20 +126,12 @@
             </svg>
             Student Accounts
           </button>
-          <button type="button" class="nav-item" data-view="change-password">
+          <button type="button" class="nav-item" data-view="passwords">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
-            Change Password
-          </button>
-          <button type="button" class="nav-item" data-view="pw-resets">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            Password Resets
+            Passwords
             <span id="nav-pw-reset-count" class="badge badge-pending" style="margin-left:6px;"></span>
           </button>
         </div>
@@ -200,6 +192,17 @@
               <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
             </svg>
             Export Excel
+          </button>
+          <button id="delete-all-books-btn" type="button"
+            style="background:var(--danger-lt);color:var(--danger);border:1.5px solid #fca5a5;box-shadow:none;"
+            title="Permanently delete every book in the library">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+            </svg>
+            Delete All Books
           </button>
         </div>
 
@@ -267,52 +270,29 @@
         <div id="accounts-wrap"></div>
       </div>
 
-      <!-- Change Password -->
-      <div id="change-password" class="section-card admin-section">
-        <h2>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2.2">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      <!-- Passwords (combined: reset requests + change password) -->
+      <div id="passwords" class="section-card admin-section">
+
+        <!-- ① Password Reset Requests from students -->
+        <h2 style="margin-bottom:6px;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
           </svg>
-          Change Password
+          Password Reset Requests
+          <span id="pw-reset-badge" class="badge badge-pending" style="margin-left:6px;"></span>
         </h2>
+        <p class="muted" style="margin-bottom:16px;font-size:13px;">
+          Students who forgot their password can submit a request here. Set a new password for them and they can sign in with it.
+        </p>
+        <div id="pw-resets-wrap"></div>
 
-        <!-- Admin changes own password -->
-        <div style="margin-bottom:28px;">
-          <div class="form-section-label" style="margin-bottom:14px;">Your Admin Password</div>
-          <form id="admin-pw-form" style="max-width:420px;">
-            <div style="display:flex;flex-direction:column;gap:12px;">
-              <label>Current Password
-                <div class="pw-wrap"><input id="admin-current-pw" type="password" placeholder="Enter current password" autocomplete="current-password" />
-                <button type="button" class="eye-btn" data-target="admin-current-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-              </label>
-              <label>New Password
-                <div class="pw-wrap"><input id="admin-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
-                <button type="button" class="eye-btn" data-target="admin-new-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-              </label>
-              <label>Confirm New Password
-                <div class="pw-wrap"><input id="admin-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
-                <button type="button" class="eye-btn" data-target="admin-confirm-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
-              </label>
-              <p id="admin-pw-msg" style="display:none;font-size:13px;padding:9px 12px;border-radius:8px;margin:0;"></p>
-              <div>
-                <button type="submit" style="background:var(--grad-brand);">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                  </svg>
-                  Update My Password
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <!-- Admin resets a student password -->
-        <div style="padding-top:22px;border-top:2px dashed var(--border);">
-          <div class="form-section-label" style="margin-bottom:6px;">Reset a Student&rsquo;s Password</div>
+        <!-- ② Admin resets a student password manually -->
+        <div style="margin-top:32px;padding-top:24px;border-top:2px dashed var(--border);">
+          <div class="form-section-label" style="margin-bottom:6px;">Manually Reset a Student&rsquo;s Password</div>
           <p class="muted" style="margin-bottom:16px;font-size:13px;">
-            Use this when a student has forgotten their password. Select their account and assign a new temporary password.
+            Use this to assign a new password directly without waiting for a student request.
           </p>
           <form id="reset-pw-form" style="max-width:420px;">
             <div style="display:flex;flex-direction:column;gap:12px;">
@@ -342,23 +322,37 @@
             </div>
           </form>
         </div>
-      </div>
 
-      <!-- Password Reset Requests -->
-      <div id="pw-resets" class="section-card admin-section">
-        <h2>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="12" y1="8" x2="12" y2="12"/>
-            <line x1="12" y1="16" x2="12.01" y2="16"/>
-          </svg>
-          Password Reset Requests
-          <span id="pw-reset-badge" class="badge badge-pending"></span>
-        </h2>
-        <p class="muted" style="margin-bottom:16px;font-size:13px;">
-          Students who forgot their password can submit a request here. Set a new password for them and they can sign in with it.
-        </p>
-        <div id="pw-resets-wrap"></div>
+        <!-- ③ Admin changes their own password -->
+        <div style="margin-top:32px;padding-top:24px;border-top:2px dashed var(--border);">
+          <div class="form-section-label" style="margin-bottom:14px;">Change Your Admin Password</div>
+          <form id="admin-pw-form" style="max-width:420px;">
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <label>Current Password
+                <div class="pw-wrap"><input id="admin-current-pw" type="password" placeholder="Enter current password" autocomplete="current-password" />
+                <button type="button" class="eye-btn" data-target="admin-current-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </label>
+              <label>New Password
+                <div class="pw-wrap"><input id="admin-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="admin-new-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </label>
+              <label>Confirm New Password
+                <div class="pw-wrap"><input id="admin-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="admin-confirm-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
+              </label>
+              <p id="admin-pw-msg" style="display:none;font-size:13px;padding:9px 12px;border-radius:8px;margin:0;"></p>
+              <div>
+                <button type="submit" style="background:var(--grad-brand);">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                  Update My Password
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
 
     </div>

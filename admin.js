@@ -16,14 +16,15 @@
   const categoryCustom  = document.getElementById('category-custom')
   const requestsWrap    = document.getElementById('requests-wrap')
   const pendingCount    = document.getElementById('pending-count')
-  const excelFile       = document.getElementById('excel-file')
-  const loadSampleBtn   = document.getElementById('load-sample-btn')
-  const exportXlsxBtn   = document.getElementById('export-xlsx')
-  const endpointInput   = document.getElementById('endpoint')
-  const syncBtn         = document.getElementById('sync-btn')
-  const syncStatus      = document.getElementById('sync-status')
-  const logoutBtn       = document.getElementById('logout-btn')
-  const welcomeText     = document.getElementById('welcome-text')
+  const excelFile         = document.getElementById('excel-file')
+  const loadSampleBtn     = document.getElementById('load-sample-btn')
+  const exportXlsxBtn     = document.getElementById('export-xlsx')
+  const deleteAllBooksBtn = document.getElementById('delete-all-books-btn')
+  const endpointInput     = document.getElementById('endpoint')
+  const syncBtn           = document.getElementById('sync-btn')
+  const syncStatus        = document.getElementById('sync-status')
+  const logoutBtn         = document.getElementById('logout-btn')
+  const welcomeText       = document.getElementById('welcome-text')
 
   welcomeText.textContent = 'Signed in as ' + user.name + ' — manage books and review borrow requests.'
 
@@ -420,6 +421,42 @@
     loadBooks(); updateAdminCategoryOptions(); renderTable()
   }
 
+  // ── Delete ALL books ─────────────────────────────────────────────────────
+  function onDeleteAllBooks() {
+    if (books.length === 0) { alert('There are no books to delete.'); return }
+    var firstConfirm = confirm(
+      'Delete ALL ' + books.length + ' books from the library?\n\n'
+      + 'This will permanently remove every book and cannot be undone.'
+    )
+    if (!firstConfirm) return
+    var secondConfirm = confirm(
+      'Are you absolutely sure?\n\n'
+      + 'Type OK to confirm deleting all ' + books.length + ' books.'
+    )
+    if (!secondConfirm) return
+
+    // Record each book as deleted so Firebase removes them from Firestore too
+    books.forEach(function (b) {
+      if (b && b.id) {
+        LibraryAuth.rememberDeleted(LibraryAuth.DELETED_BOOKS_KEY, b.id)
+        try {
+          if (window.LibraryFirebase && window.LibraryFirebase.deleteBook) {
+            window.LibraryFirebase.deleteBook(b.id)
+          }
+        } catch (e) {}
+      }
+    })
+
+    books = []
+    LibraryAuth.saveBooks(books)
+    window.adminCurrentPage = 1
+    loadBooks()
+    updateAdminCategoryOptions()
+    renderTable()
+    updateStats()
+    alert('All books have been deleted successfully.')
+  }
+
   form.addEventListener('submit', function (evt) {
     evt.preventDefault()
     const id = document.getElementById('book-id').value
@@ -465,6 +502,7 @@
   })
   if (loadSampleBtn) loadSampleBtn.addEventListener('click', loadSample)
   exportXlsxBtn.addEventListener('click', exportXLSX)
+  if (deleteAllBooksBtn) deleteAllBooksBtn.addEventListener('click', onDeleteAllBooks)
   syncBtn.addEventListener('click', syncBooks)
 
   async function maybeAutoImportBook1() {
@@ -647,7 +685,7 @@
   function initAdminNav() {
     const nav = document.querySelector('.admin-nav'); if (!nav) return
     const navItems = nav.querySelectorAll('.nav-item')
-    const views = ['add-edit', 'books', 'requests', 'accounts', 'change-password', 'pw-resets']
+    const views = ['add-edit', 'books', 'requests', 'accounts', 'passwords']
     function show(view) {
       views.forEach(function (v) { const el = document.getElementById(v); if (el) el.style.display = v === view ? '' : 'none' })
       navItems.forEach(function (it) {
@@ -655,8 +693,16 @@
         else { it.classList.remove('active'); it.removeAttribute('aria-current') }
       })
       if (view === 'accounts') renderAccounts()
-      if (view === 'change-password') populateStudentSelect()
-      if (view === 'pw-resets') renderPwResets()
+      if (view === 'passwords') {
+        populateStudentSelect()
+        renderPwResets()
+        // Pull latest reset requests from Firebase so the list is always fresh
+        try {
+          if (window.LibraryFirebase && window.LibraryFirebase.pullPwResets) {
+            window.LibraryFirebase.pullPwResets().then(function () { renderPwResets() }).catch(function(){})
+          }
+        } catch(e) {}
+      }
       try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) {}
     }
     navItems.forEach(function (it) { it.addEventListener('click', function () { show(this.dataset.view) }) })
@@ -776,7 +822,7 @@
       ;(function (uid) {
         resetBtn.addEventListener('click', function () {
           var navBtns = document.querySelectorAll('.nav-item')
-          navBtns.forEach(function (btn) { if (btn.dataset.view === 'change-password') btn.click() })
+          navBtns.forEach(function (btn) { if (btn.dataset.view === 'passwords') btn.click() })
           var sel = document.getElementById('reset-student-select')
           if (sel) {
             sel.value = uid

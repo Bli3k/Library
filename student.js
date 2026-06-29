@@ -122,8 +122,9 @@
         const pending = requests.find(function (r) {
           return r.userId === user.id && String(r.bookId) === String(book.id) && r.status === 'pending'
         })
+        // Only treat as 'still borrowed' if the book has NOT been marked returned
         const approved = requests.find(function (r) {
-          return r.userId === user.id && String(r.bookId) === String(book.id) && r.status === 'approved'
+          return r.userId === user.id && String(r.bookId) === String(book.id) && r.status === 'approved' && !r.returnedAt
         })
 
         let action = ''
