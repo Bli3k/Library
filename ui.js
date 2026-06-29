@@ -14,23 +14,8 @@
       })
     }
 
-    // ── Auto-load sample Excel on first admin visit ───────────────────────────
-    // Fires the Load Sample button once automatically so the demo works out of
-    // the box without the admin needing to import anything manually.
-    const isAdminPage =
-      window.location.pathname.endsWith('/admin.html') ||
-      window.location.pathname.endsWith('admin.html')
-
-    if (isAdminPage) {
-      try {
-        const seen = localStorage.getItem('library_demo_sample_loaded_v1')
-        if (!seen) {
-          localStorage.setItem('library_demo_sample_loaded_v1', '1')
-          const btnLoad = document.getElementById('load-sample-btn')
-          if (btnLoad) setTimeout(function () { btnLoad.click() }, 500)
-        }
-      } catch (err) {}
-    }
+    // Auto-load sample removed — it triggered saveBooks() → Firebase sync →
+    // onSnapshot → pullBooks() on every page open, causing a continuous sync loop.
 
     // ── Eye toggle — password reveal for all .eye-btn buttons ──────────────────
     // Uses event delegation so it works for dynamically added buttons too

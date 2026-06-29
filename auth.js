@@ -43,9 +43,21 @@
 
   function saveUsers(users) {
     localStorage.setItem(USERS_KEY, JSON.stringify(users))
-    // Firebase sync (non-blocking)
+    // Firebase sync (non-blocking, debounced)
     try {
       if (window.LibraryFirebase && window.LibraryFirebase.syncUsers) {
+        window.LibraryFirebase.syncUsers(users)
+      }
+    } catch (e) {}
+  }
+
+  function saveUsersImmediate(users) {
+    // Bypasses debounce — used at registration so admin sees new student instantly
+    localStorage.setItem(USERS_KEY, JSON.stringify(users))
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.syncUsersNow) {
+        window.LibraryFirebase.syncUsersNow(users)
+      } else if (window.LibraryFirebase && window.LibraryFirebase.syncUsers) {
         window.LibraryFirebase.syncUsers(users)
       }
     } catch (e) {}
@@ -61,7 +73,7 @@
       if (session) {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session))
         localStorage.setItem('library_active_session_' + session.userId, session.sessionId)
-        try { sessionStorage.setItem('library_current_session_id', session.sessionId) } catch (e) {}
+        // sessionStorage deliberately omitted — wiped on Electron file:// navigation
       } else {
         const old = loadSession()
         if (old && old.userId) {
@@ -72,7 +84,7 @@
           } catch (e) {}
         }
         localStorage.removeItem(SESSION_KEY)
-        try { sessionStorage.removeItem('library_current_session_id') } catch (e) {}
+        // sessionStorage deliberately omitted — wiped on Electron file:// navigation
       }
     } catch (e) {
       if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
@@ -142,6 +154,18 @@
     } catch (e) {}
   }
 
+  function saveRequestsImmediate(requests) {
+    // Bypasses debounce — used for approve/reject so the other device sees it instantly
+    localStorage.setItem(REQUESTS_KEY, JSON.stringify(requests))
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.syncRequestsNow) {
+        window.LibraryFirebase.syncRequestsNow(requests)
+      } else if (window.LibraryFirebase && window.LibraryFirebase.syncRequests) {
+        window.LibraryFirebase.syncRequests(requests)
+      }
+    } catch (e) {}
+  }
+
   function loadBooks() {
     try { const raw = localStorage.getItem(BOOKS_KEY); return raw ? JSON.parse(raw) : [] }
     catch (e) { return [] }
@@ -188,7 +212,7 @@
       contactNumber: (userData.contactNumber || '').trim(),
       email, createdAt: new Date().toISOString()
     }
-    users.push(user); saveUsers(users)
+    users.push(user); saveUsersImmediate(users)
     return { ok: true, user }
   }
 
@@ -278,7 +302,7 @@
       returnedAt: null,
       returnNotifiedAt: null
     })
-    saveRequests(requests)
+    saveRequestsImmediate(requests)
     return { ok: true, request: requests[idx] }
   }
 
@@ -289,7 +313,7 @@
     if (idx < 0) return { ok: false, error: 'Request not found.' }
     if (requests[idx].status !== 'approved') return { ok: false, error: 'This request is not approved.' }
     requests[idx] = Object.assign({}, requests[idx], { returnedAt: new Date().toISOString() })
-    saveRequests(requests)
+    saveRequestsImmediate(requests)
     return { ok: true, request: requests[idx] }
   }
 
@@ -301,38 +325,6 @@
     requests[idx] = Object.assign({}, requests[idx], { returnNotifiedAt: new Date().toISOString() })
     saveRequests(requests)
     return { ok: true, request: requests[idx] }
-  }
-
-  // Delete a student account (admin only)
-  function deleteUser(userId) {
-    const users = loadUsers()
-    const idx   = users.findIndex(function (u) { return u.id === userId })
-    if (idx < 0) return { ok: false, error: 'User not found.' }
-    if (users[idx].role === 'admin') return { ok: false, error: 'Cannot delete admin account.' }
-    users.splice(idx, 1)
-    saveUsers(users)
-    // Also flag deletion in Firebase via LibraryFirebase if available
-    try {
-      if (window.LibraryFirebase && window.LibraryFirebase.deleteUser) {
-        window.LibraryFirebase.deleteUser(userId)
-      }
-    } catch (e) {}
-    return { ok: true }
-  }
-
-  // Delete a borrow request (admin only — for cleanup of old/done requests)
-  function deleteBorrowRequest(requestId) {
-    const requests = loadRequests()
-    const idx      = requests.findIndex(function (r) { return r.id === requestId })
-    if (idx < 0) return { ok: false, error: 'Request not found.' }
-    requests.splice(idx, 1)
-    saveRequests(requests)
-    try {
-      if (window.LibraryFirebase && window.LibraryFirebase.deleteRequest) {
-        window.LibraryFirebase.deleteRequest(requestId)
-      }
-    } catch (e) {}
-    return { ok: true }
   }
 
   function deleteBook(bookId) {
@@ -459,22 +451,15 @@
   ensureDefaultAdmin()
 
   window.addEventListener('storage', function (e) {
+    // Only check localStorage session — sessionStorage is not used (breaks Electron)
     try {
-      const clientSid = sessionStorage.getItem('library_current_session_id')
       const current = loadSession()
-      if (!current) {
-        if (clientSid) {
-          saveSession(null)
-          try { alert('You have been logged out (session ended in another tab).') } catch (er) {}
-          try { window.location.href = 'login.html' } catch (er) {}
-        }
-        return
-      }
+      if (!current) return
       const activeKey = 'library_active_session_' + current.userId
       const activeSid = localStorage.getItem(activeKey)
-      if (clientSid && activeSid && clientSid !== activeSid) {
+      if (!activeSid || activeSid !== current.sessionId) {
         saveSession(null)
-        try { alert('Your account was signed in from another tab. You have been logged out.') } catch (er) {}
+        try { alert('Your account was signed in from another tab or device. You have been logged out.') } catch (er) {}
         try { window.location.href = 'login.html' } catch (er) {}
       }
     } catch (err) {}
@@ -496,7 +481,7 @@
     USERS_KEY, SESSION_KEY, REQUESTS_KEY, BOOKS_KEY, PW_RESET_KEY,
     DELETED_REQUESTS_KEY, DELETED_BOOKS_KEY, DELETED_PW_RESET_KEY,
     // data loaders — all exposed so firebase-sync.js can call loadUsers()
-    loadUsers, saveUsers,
+    loadUsers, saveUsers, saveUsersImmediate,
     loadSession,
     loadRequests, saveRequests,
     loadBooks, saveBooks,

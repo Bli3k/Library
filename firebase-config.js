@@ -154,6 +154,8 @@
       }
     }
     var syncRequests = debounce(syncRequestsRaw, 1200)
+    // Non-debounced version for approve/reject — pushes immediately
+    var syncRequestsNow = syncRequestsRaw
 
     // Sync forgot-password requests so the admin sees them on every app.
     var syncPwResetsRaw = async function (resets) {
@@ -202,6 +204,8 @@
       }
     }
     var syncUsers = debounce(syncUsersRaw, 2000)
+    // Non-debounced — used at registration
+    var syncUsersNow = syncUsersRaw
 
     // ── DELETE USER from Firestore ──────────────────────────────────────────
     // Called when admin deletes a student account — removes it from Firestore
@@ -253,7 +257,6 @@
       } catch (e) { console.warn('[Firebase] flushDeletedDocs error:', e) }
     }
 
-    // ── PULL BOOKS ──────────────────────────────────────────────────────────
     async function pullBooks() {
       try {
         var snap = await getDocs(collection(db, 'books'))
@@ -271,16 +274,11 @@
           var key   = String(rb.id)
           var local = localMap.get(key)
           if (!local) {
+            // Book exists in Firestore but not locally — add it
             localMap.set(key, rb); changed = true
-          } else {
-            Object.keys(rb).forEach(function (k) {
-              var rv = rb[k], lv = local[k]
-              if (rv !== undefined && rv !== null && String(rv).trim() !== '' &&
-                  (lv === undefined || lv === null || String(lv).trim() === '')) {
-                local[k] = rv; changed = true
-              }
-            })
           }
+          // If book exists locally, keep local copy — it is authoritative.
+          // The admin edits books on this device; remote is only used to add missing books.
         })
         if (changed) {
           localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(Array.from(localMap.values())))
@@ -307,13 +305,20 @@
           var key   = String(rr.id)
           var local = localMap.get(key)
           if (!local) {
+            // New request from another device
             localMap.set(key, rr); changed = true
-          } else if (rr.status !== 'pending' && local.status === 'pending') {
-            localMap.set(key, rr); changed = true
-          } else if (rr.reviewedAt && local.reviewedAt) {
-            var rt = new Date(rr.reviewedAt).getTime()
-            var lt = new Date(local.reviewedAt).getTime()
-            if (!isNaN(rt) && !isNaN(lt) && rt > lt) { localMap.set(key, rr); changed = true }
+          } else {
+            // Remote wins if:
+            // 1. Remote status is not pending and local is still pending (admin acted)
+            // 2. Remote has a newer reviewedAt timestamp
+            // 3. Remote has returnedAt set but local doesn't
+            var remoteActed  = rr.status !== 'pending' && local.status === 'pending'
+            var remoteNewer  = rr.reviewedAt && local.reviewedAt &&
+                               new Date(rr.reviewedAt).getTime() > new Date(local.reviewedAt).getTime()
+            var remoteReturn = rr.returnedAt && !local.returnedAt
+            if (remoteActed || remoteNewer || remoteReturn) {
+              localMap.set(key, rr); changed = true
+            }
           }
         })
         if (changed) {
@@ -392,10 +397,21 @@
           }
         })
         var students = Array.from(localMap.values())
-        // Only keep students that still exist in Firestore
-        // (if Firestore is empty, skip — avoids wiping on first load)
+        // Guard: if Firestore is empty, never wipe local students
         if (remoteIds.size === 0) return
-        var kept    = students.filter(function (u) { return remoteIds.has(String(u.id)) })
+
+        // Only remove a student if:
+        //  1. They exist in Firestore at all (remoteIds.size > 0 means we got a real snapshot)
+        //  2. Their ID is NOT in Firestore — meaning admin explicitly deleted them
+        //  3. They are NOT brand-new (createdAt within last 30 seconds) — give debounce time to sync
+        var nowMs = Date.now()
+        var kept    = students.filter(function (u) {
+          if (remoteIds.has(String(u.id))) return true  // still in Firestore, keep
+          // Check if this is a very recently registered student not yet synced
+          var age = u.createdAt ? (nowMs - new Date(u.createdAt).getTime()) : Infinity
+          if (age < 30000) return true  // less than 30 s old — keep, sync pending
+          return false  // absent from Firestore and old enough — admin deleted, remove
+        })
         var removed = students.length - kept.length
         if (removed > 0 || changed) {
           var merged = admins.concat(kept)
@@ -463,7 +479,7 @@
     startPeriodicSync()
 
     window.LibraryFirebase = {
-      syncBooks, syncRequests, syncUsers, syncPwResets, syncAll,
+      syncBooks, syncRequests, syncRequestsNow, syncUsers, syncUsersNow, syncPwResets, syncAll,
       pullBooks, pullRequests, pullUsers, pullPwResets,
       deleteUser, deleteRequest, deleteBook, deletePwReset,
       db

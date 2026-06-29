@@ -1010,6 +1010,11 @@
   window.addEventListener('libraryPwResetsUpdated', function () {
     renderPwResets()
   })
+  // Re-render accounts when Firebase pulls new student registrations
+  window.addEventListener('libraryUsersUpdated', function () {
+    renderAccounts()
+    populateStudentSelect()
+  })
 
   loadBooks()
   try { dedupeStoredBooks() } catch (e) {}
