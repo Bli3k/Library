@@ -55,32 +55,23 @@
     try {
       if (session) {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-        localStorage.setItem(
-          'library_active_session_' + session.userId,
-          session.sessionId
-        )
+        localStorage.setItem('library_active_session_' + session.userId, session.sessionId)
+        try { sessionStorage.setItem('library_current_session_id', session.sessionId) } catch (e) {}
       } else {
         const old = loadSession()
-  
         if (old && old.userId) {
           try {
             const key = 'library_active_session_' + old.userId
             const active = localStorage.getItem(key)
-  
-            if (active && active === old.sessionId) {
-              localStorage.removeItem(key)
-            }
+            if (active && active === old.sessionId) localStorage.removeItem(key)
           } catch (e) {}
         }
-  
         localStorage.removeItem(SESSION_KEY)
+        try { sessionStorage.removeItem('library_current_session_id') } catch (e) {}
       }
     } catch (e) {
-      if (session) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-      } else {
-        localStorage.removeItem(SESSION_KEY)
-      }
+      if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+      else localStorage.removeItem(SESSION_KEY)
     }
   }
 
@@ -157,26 +148,23 @@
     return { ok: true, user, session }
   }
 
-  function logout() {
-    saveSession(null)
-  }
+  function logout() { saveSession(null) }
 
   function getCurrentUser() {
     const session = loadSession()
     if (!session) return null
     const users = loadUsers()
-    // REMOVE the sessionStorage cross-check — it breaks in Electron file:// navigation
-    // Just verify the active session key matches
     try {
+      const clientSid = sessionStorage.getItem('library_current_session_id')
       const activeSid = localStorage.getItem('library_active_session_' + session.userId)
-      if (!activeSid || activeSid !== session.sessionId) return null
+      if (!clientSid || !activeSid || clientSid !== session.sessionId || activeSid !== session.sessionId) return null
     } catch (e) {}
     return users.find((u) => u.id === session.userId) || null
   }
 
   function requireAuth(allowedRoles) {
     const user = getCurrentUser()
-    if (!user) { window.location.replace('login.html'); return null }
+    if (!user) { window.location.href = 'login.html'; return null }
     if (allowedRoles && !allowedRoles.includes(user.role)) {
       window.location.href = user.role === 'admin' ? 'admin.html' : 'student.html'; return null
     }
@@ -260,29 +248,90 @@
     return { ok: true, request: requests[idx] }
   }
 
+  // Delete a student account (admin only)
+  function deleteUser(userId) {
+    const users = loadUsers()
+    const idx   = users.findIndex(function (u) { return u.id === userId })
+    if (idx < 0) return { ok: false, error: 'User not found.' }
+    if (users[idx].role === 'admin') return { ok: false, error: 'Cannot delete admin account.' }
+    users.splice(idx, 1)
+    saveUsers(users)
+    // Also flag deletion in Firebase via LibraryFirebase if available
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deleteUser) {
+        window.LibraryFirebase.deleteUser(userId)
+      }
+    } catch (e) {}
+    return { ok: true }
+  }
+
+  // Delete a borrow request (admin only — for cleanup of old/done requests)
+  function deleteBorrowRequest(requestId) {
+    const requests = loadRequests()
+    const idx      = requests.findIndex(function (r) { return r.id === requestId })
+    if (idx < 0) return { ok: false, error: 'Request not found.' }
+    requests.splice(idx, 1)
+    saveRequests(requests)
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deleteRequest) {
+        window.LibraryFirebase.deleteRequest(requestId)
+      }
+    } catch (e) {}
+    return { ok: true }
+  }
+
+  // Delete a student account — also tells Firebase to remove it
+  function deleteUser(userId) {
+    var users = loadUsers()
+    var idx   = users.findIndex(function (u) { return u.id === userId })
+    if (idx < 0) return { ok: false, error: 'User not found.' }
+    if (users[idx].role === 'admin') return { ok: false, error: 'Cannot delete admin account.' }
+    users.splice(idx, 1)
+    saveUsers(users)
+    // Also delete from Firestore so it does not come back on next pull
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deleteUser) {
+        window.LibraryFirebase.deleteUser(userId)
+      }
+    } catch (e) {}
+    return { ok: true }
+  }
+
+  // Delete a borrow request — also removes it from Firestore
+  function deleteBorrowRequest(requestId) {
+    var requests = loadRequests()
+    var idx      = requests.findIndex(function (r) { return r.id === requestId })
+    if (idx < 0) return { ok: false, error: 'Request not found.' }
+    requests.splice(idx, 1)
+    saveRequests(requests)
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.deleteRequest) {
+        window.LibraryFirebase.deleteRequest(requestId)
+      }
+    } catch (e) {}
+    return { ok: true }
+  }
+
   ensureDefaultAdmin()
 
-  window.addEventListener('storage', function () {
+  window.addEventListener('storage', function (e) {
     try {
+      const clientSid = sessionStorage.getItem('library_current_session_id')
       const current = loadSession()
-  
-      if (!current) return
-  
+      if (!current) {
+        if (clientSid) {
+          saveSession(null)
+          try { alert('You have been logged out (session ended in another tab).') } catch (er) {}
+          try { window.location.href = 'login.html' } catch (er) {}
+        }
+        return
+      }
       const activeKey = 'library_active_session_' + current.userId
       const activeSid = localStorage.getItem(activeKey)
-  
-      if (!activeSid || activeSid !== current.sessionId) {
+      if (clientSid && activeSid && clientSid !== activeSid) {
         saveSession(null)
-  
-        try {
-          alert(
-            'Your account was signed in elsewhere. You have been logged out.'
-          )
-        } catch (e) {}
-  
-        try {
-          window.location.replace = 'login.html'
-        } catch (e) {}
+        try { alert('Your account was signed in from another tab. You have been logged out.') } catch (er) {}
+        try { window.location.href = 'login.html' } catch (er) {}
       }
     } catch (err) {}
   })
@@ -300,6 +349,7 @@
     getAvailableCopies, getApprovedBorrowCount,
     createBorrowRequest, updateBorrowRequest,
     markBookReturned, notifyReturn,
+    deleteUser, deleteBorrowRequest,
     ensureDefaultAdmin
   }
 })()

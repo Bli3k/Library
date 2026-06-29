@@ -634,3 +634,24 @@ a:hover { text-decoration: underline; }
 /* ── Smooth transitions for view switching ─────────────── */
 .admin-section { transition: opacity 0.18s ease; }
 .admin-section[style*="display: none"] { opacity: 0; }
+
+/* ── Login page compact overrides ─────────────────────────────── */
+/* Shrinks the auth card on login/index pages so the logo doesn't dominate */
+.auth-card.compact {
+  max-width: 380px !important;
+  padding: 26px 28px !important;
+}
+.auth-card.compact .brand-logo {
+  height: 44px !important;
+  width: 44px !important;
+}
+.auth-card.compact .brand-school {
+  font-size: 9px !important;
+  letter-spacing: 0.7px;
+}
+.auth-card.compact .brand-title {
+  font-size: 17px !important;
+}
+.auth-card.compact .brand-sub {
+  font-size: 12px !important;
+}

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, shell } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 
@@ -59,18 +59,16 @@ function createMainWindow () {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true,
+      webSecurity: false,
       preload: appFile('preload.js'),
-      devTools: false,
-      // Add this:
-      allowRunningInsecureContent: false
+      devTools: false
     }
   })
 
   Menu.setApplicationMenu(null)
 
   // Load login.html directly — skips the index.html sessionStorage issue
-  mainWindow.loadFile(appFile('index.html'))
+  mainWindow.loadFile(appFile('login.html'))
 
   // Close splash and show main window once ready
   mainWindow.once('ready-to-show', () => {
@@ -128,16 +126,4 @@ autoUpdater.on('update-available', () => {
 })
 autoUpdater.on('update-downloaded', () => {
   if (mainWindow) mainWindow.webContents.send('update-downloaded')
-})
-// ── Install downloaded update ─────────────────────────────
-ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall()
-})
-
-process.on('uncaughtException', err => {
-  console.error(err)
-})
-
-process.on('unhandledRejection', err => {
-  console.error(err)
 })

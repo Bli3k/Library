@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" 
+    <meta http-equiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sign In — BCST Library</title>
@@ -15,51 +15,53 @@
           radial-gradient(ellipse at 80% 10%, rgba(37,99,235,0.28) 0%, transparent 55%),
           linear-gradient(150deg, #0a1628 0%, #0f2240 40%, #0b2d1a 100%);
       }
-      .brand-area { text-align: center; margin-bottom: 24px; }
-      .brand-area img {
-        height: 82px; width: 82px; object-fit: contain;
-        display: block; margin: 0 auto 14px;
-        filter: drop-shadow(0 6px 16px rgba(0,0,0,0.22));
+      .brand-area {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 18px;
+        border-bottom: 1px solid var(--border);
       }
-      .brand-area .school { font-size: 10.5px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase; color: #2563eb; margin-bottom: 6px; }
-      .brand-area h1 { margin: 0 0 4px; font-size: 24px; font-weight: 800; color: #0f2240; letter-spacing: -0.3px; }
-      .brand-area p { color: #64748b; font-size: 13.5px; margin: 0; }
     </style>
   </head>
   <body>
     <div class="container auth-page">
-      <div class="auth-card">
+      <div class="auth-card compact">
+
         <div class="brand-area">
-          <img src="img/logo.png" alt="Bohol College of Science and Technology Logo" />
-          <div class="school">Bohol College of Science and Technology, Inc.</div>
-          <h1>Library System</h1>
-          <p>Sign in to browse books or manage the library.</p>
+          <img src="img/logo.png" alt="BCST Logo" class="brand-logo" />
+          <div>
+            <div class="brand-school">Bohol College of Science and Technology, Inc.</div>
+            <div class="brand-title">Library System</div>
+            <div class="brand-sub">Sign in to browse or manage the library.</div>
+          </div>
         </div>
 
-        <form id="login-form" class="auth-form">
+        <form id="login-form" class="auth-form" style="margin-top:0;">
           <label>
             Email
-            <input id="login-id" type="text" required placeholder="Your registered email or username" autocomplete="username" />
+            <input id="login-id" type="text" required placeholder="Email or username" autocomplete="username" />
           </label>
           <label>
             Password
-            <input id="login-password" type="password" required placeholder="Your password" autocomplete="current-password" />
+            <input id="login-password" type="password" required placeholder="Password" autocomplete="current-password" />
           </label>
           <p id="login-error" class="error-msg" hidden></p>
           <button type="submit">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
             Sign In
           </button>
         </form>
 
-        <div class="divider" style="margin:16px 0 12px;">or</div>
-
-
-        <p class="auth-footer">
+        <p class="auth-footer" style="margin-top:14px;font-size:12.5px;">
           No account? <a href="register.html">Register here</a>
         </p>
+
       </div>
     </div>
 

@@ -303,6 +303,9 @@
                + ' <button class="btn-link small" data-id="' + req.id + '" data-action="notify-return" style="background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);">&#128276; Notify</button>'
       } else if (req.status === 'approved' && req.returnedAt) {
         actions = '<span class="muted" style="font-size:12px;">Returned ' + new Date(req.returnedAt).toLocaleDateString() + '</span>'
+               + ' <button class="btn-link small reject" data-id="' + req.id + '" data-action="delete-request" style="margin-left:4px;">Delete</button>'
+      } else if (req.status === 'rejected') {
+        actions = '<button class="btn-link small reject" data-id="' + req.id + '" data-action="delete-request">Delete</button>'
       }
 
       // Row highlight for overdue (approved, not returned, approved > 7 days ago)
@@ -331,6 +334,7 @@
     requestsWrap.querySelectorAll('button[data-action="reject"]').forEach(function (btn) { btn.addEventListener('click', onReject) })
     requestsWrap.querySelectorAll('button[data-action="mark-returned"]').forEach(function (btn) { btn.addEventListener('click', onMarkReturned) })
     requestsWrap.querySelectorAll('button[data-action="notify-return"]').forEach(function (btn) { btn.addEventListener('click', onNotifyReturn) })
+    requestsWrap.querySelectorAll('button[data-action="delete-request"]').forEach(function (btn) { btn.addEventListener('click', onDeleteRequest) })
   }
 
   function onApprove(e) {
@@ -338,14 +342,7 @@
     var notes = prompt('Optional note for the student (leave blank to skip):') || ''
     var result = LibraryAuth.updateBorrowRequest(id, 'approved', notes)
     if (!result.ok) { alert(result.error); return }
-    renderTable()
-    renderRequests()
-
-    if (window.LibraryFirebase) {
-      LibraryFirebase.syncRequests(
-        LibraryAuth.loadRequests()
-      )
-    }
+    renderTable(); renderRequests()
   }
 
   function onReject(e) {
@@ -354,12 +351,6 @@
     var result = LibraryAuth.updateBorrowRequest(id, 'rejected', notes)
     if (!result.ok) { alert(result.error); return }
     renderRequests()
-
-    if (window.LibraryFirebase) {
-      LibraryFirebase.syncRequests(
-        LibraryAuth.loadRequests()
-      )
-    }
   }
 
   function onMarkReturned(e) {
@@ -367,14 +358,7 @@
     if (!confirm('Mark this book as returned? This will free up one copy.')) return
     var result = LibraryAuth.markBookReturned(id)
     if (!result.ok) { alert(result.error); return }
-    renderTable()
-    renderRequests()
-
-    if (window.LibraryFirebase) {
-      LibraryFirebase.syncRequests(
-        LibraryAuth.loadRequests()
-      )
-    }
+    renderTable(); renderRequests()
   }
 
   function onNotifyReturn(e) {
@@ -393,12 +377,19 @@
     alert(msg)
     LibraryAuth.notifyReturn(id)
     renderRequests()
-    
-    if (window.LibraryFirebase) {
-      LibraryFirebase.syncRequests(
-        LibraryAuth.loadRequests()
-      )
+  }
+
+  function onDeleteRequest(e) {
+    var id = e.currentTarget.dataset.id
+    if (!confirm('Delete this request permanently? This cannot be undone.')) return
+    var result = LibraryAuth.deleteBorrowRequest(id)
+    if (!result.ok) { alert(result.error); return }
+    // Also delete from Firestore
+    if (window.LibraryFirebase && window.LibraryFirebase.deleteRequest) {
+      window.LibraryFirebase.deleteRequest(id)
     }
+    renderRequests()
+    renderTable()
   }
 
   function onEdit(e) {
