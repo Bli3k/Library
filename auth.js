@@ -4,6 +4,7 @@
   const SESSION_KEY = 'library_session_v1'
   const REQUESTS_KEY = 'library_borrow_requests_v1'
   const BOOKS_KEY = 'library_books_v1'
+  const PW_RESET_KEY = 'library_pw_resets_v1'
 
   // ── Firebase SDK (loaded via CDN modules in firebase-sync.js) ──────────────
   // Firebase is optional; if window.LibraryFirebase is defined, we'll sync to it.
@@ -154,10 +155,12 @@
     const session = loadSession()
     if (!session) return null
     const users = loadUsers()
+    // NOTE: sessionStorage check is intentionally removed — it is wiped on every
+    // Electron file:// page navigation, causing requireAuth to always return null.
+    // We only verify the active session key in localStorage.
     try {
-      const clientSid = sessionStorage.getItem('library_current_session_id')
       const activeSid = localStorage.getItem('library_active_session_' + session.userId)
-      if (!clientSid || !activeSid || clientSid !== session.sessionId || activeSid !== session.sessionId) return null
+      if (!activeSid || activeSid !== session.sessionId) return null
     } catch (e) {}
     return users.find((u) => u.id === session.userId) || null
   }
@@ -280,6 +283,69 @@
     return { ok: true }
   }
 
+  // ── Password reset requests ──────────────────────────────────────────────
+  function loadPwResets() {
+    try { var raw = localStorage.getItem(PW_RESET_KEY); return raw ? JSON.parse(raw) : [] }
+    catch (e) { return [] }
+  }
+
+  function savePwResets(resets) {
+    localStorage.setItem(PW_RESET_KEY, JSON.stringify(resets))
+  }
+
+  // Student submits a forgot-password request
+  function createPasswordResetRequest(email, reason) {
+    var users = loadUsers()
+    var user  = users.find(function (u) { return (u.email || u.loginId || '').trim().toLowerCase() === email.trim().toLowerCase() })
+    if (!user) return { ok: false, error: 'No account found with that email address.' }
+    if (user.role === 'admin') return { ok: false, error: 'Admin accounts cannot use self-service reset.' }
+    var resets  = loadPwResets()
+    // Only allow one pending reset per user
+    var already = resets.find(function (r) { return r.userId === user.id && r.status === 'pending' })
+    if (already) return { ok: false, error: 'You already have a pending reset request. Please wait for the admin to respond.' }
+    var req = {
+      id:          Date.now().toString() + Math.floor(Math.random() * 1000),
+      userId:      user.id,
+      userName:    user.name,
+      userEmail:   user.email || user.loginId || '',
+      reason:      (reason || '').trim(),
+      status:      'pending',
+      requestedAt: new Date().toISOString(),
+      resolvedAt:  null
+    }
+    resets.push(req)
+    savePwResets(resets)
+    return { ok: true, request: req }
+  }
+
+  // Admin resolves a reset request by setting a new password
+  function resolvePasswordResetRequest(resetId, newPassword) {
+    var resets = loadPwResets()
+    var idx    = resets.findIndex(function (r) { return r.id === resetId })
+    if (idx < 0) return { ok: false, error: 'Reset request not found.' }
+    var req    = resets[idx]
+    if (req.status !== 'pending') return { ok: false, error: 'This request has already been resolved.' }
+    if (!newPassword || newPassword.length < 6) return { ok: false, error: 'New password must be at least 6 characters.' }
+    // Update the user's password
+    var users    = loadUsers()
+    var userIdx  = users.findIndex(function (u) { return u.id === req.userId })
+    if (userIdx < 0) return { ok: false, error: 'Student account no longer exists.' }
+    users[userIdx].password = newPassword
+    saveUsers(users)
+    // Mark reset as resolved
+    resets[idx] = Object.assign({}, req, { status: 'resolved', resolvedAt: new Date().toISOString() })
+    savePwResets(resets)
+    return { ok: true }
+  }
+
+  // Admin dismisses/deletes a reset request
+  function deletePasswordResetRequest(resetId) {
+    var resets  = loadPwResets()
+    var filtered = resets.filter(function (r) { return r.id !== resetId })
+    savePwResets(filtered)
+    return { ok: true }
+  }
+
   // Delete a student account — also tells Firebase to remove it
   function deleteUser(userId) {
     var users = loadUsers()
@@ -350,6 +416,8 @@
     createBorrowRequest, updateBorrowRequest,
     markBookReturned, notifyReturn,
     deleteUser, deleteBorrowRequest,
+    loadPwResets, savePwResets,
+    createPasswordResetRequest, resolvePasswordResetRequest, deletePasswordResetRequest,
     ensureDefaultAdmin
   }
 })()

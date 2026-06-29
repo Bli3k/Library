@@ -2,8 +2,6 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" 
-          content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://cdn.jsdelivr.net; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com wss://*.firebaseio.com;">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Create Account — BCST Library</title>
     <link rel="stylesheet" href="styles.css" />
@@ -23,12 +21,12 @@
       <div class="auth-card auth-card-wide" style="margin:0 auto;">
         <header style="text-align:center;margin-bottom:4px;">
           <img src="img/logo.png" alt="BCST Logo"
-            style="height:76px;width:76px;object-fit:contain;display:block;margin:0 auto 12px;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.18));" />
+            style="height:48px;width:48px;object-fit:contain;display:block;margin:0 auto 10px;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.18));" />
           <div style="font-size:10.5px;font-weight:700;letter-spacing:0.9px;text-transform:uppercase;color:#2563eb;margin-bottom:6px;">
             Bohol College of Science and Technology, Inc.
           </div>
-          <h1 style="margin:0 0 4px;font-size:22px;font-weight:800;color:#0f2240;">Create Account</h1>
-          <p style="color:#64748b;font-size:13.5px;margin:0;">Register as a student to browse and request books.</p>
+          <h1 style="margin:0 0 4px;font-size:20px;font-weight:800;color:#0f2240;">Create Account</h1>
+          <p style="color:#64748b;font-size:13px;margin:0;">Register as a student to browse and request books.</p>
         </header>
 
         <form id="register-form" class="auth-form">
@@ -50,13 +48,36 @@
           <label>Address <input id="address" required placeholder="Complete home address" autocomplete="street-address" /></label>
           <div class="row">
             <label>Email <input id="email" type="email" required placeholder="you@example.com" autocomplete="email" /></label>
-            <label>Contact Number <input id="contact-number" type="tel" required placeholder="09XXXXXXXXX (11 digits)" autocomplete="tel" maxlength="11" pattern="[0-9]{11}" inputmode="numeric" /></label>
+            <label>Contact Number
+              <input id="contact-number" type="tel" required placeholder="09XXXXXXXXX (11 digits)"
+                autocomplete="tel" maxlength="11" pattern="[0-9]{11}" inputmode="numeric" />
+            </label>
           </div>
 
           <div class="section-label">Security</div>
           <div class="row">
-            <label>Password <input id="password" type="password" minlength="6" required placeholder="At least 6 characters" autocomplete="new-password" /></label>
-            <label>Confirm Password <input id="confirm-password" type="password" minlength="6" required placeholder="Re-enter password" autocomplete="new-password" /></label>
+            <label>Password
+              <div class="pw-wrap">
+                <input id="password" type="password" minlength="6" required placeholder="At least 6 characters" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="password" title="Show/hide password">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
+            <label>Confirm Password
+              <div class="pw-wrap">
+                <input id="confirm-password" type="password" minlength="6" required placeholder="Re-enter password" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="confirm-password" title="Show/hide password">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+            </label>
           </div>
 
           <p id="register-error" class="error-msg" hidden></p>
@@ -64,7 +85,8 @@
           <div class="actions" style="margin-top:8px;">
             <button type="submit" style="flex:1;padding:13px;font-size:14px;background:var(--grad-brand);">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>
               </svg>
               Create Account
             </button>

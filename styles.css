@@ -655,3 +655,55 @@ a:hover { text-decoration: underline; }
 .auth-card.compact .brand-sub {
   font-size: 12px !important;
 }
+
+/* ── Eye toggle (password reveal) ─────────────────────────── */
+.pw-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.pw-wrap input {
+  padding-right: 40px;
+}
+.eye-btn {
+  position: absolute;
+  right: 10px;
+  bottom: 9px;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px !important;
+  min-height: unset !important;
+  color: var(--muted) !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transform: none !important;
+  width: 22px;
+  height: 22px;
+}
+.eye-btn:hover { color: var(--blue) !important; }
+.eye-btn svg { pointer-events: none; }
+
+/* ── Password reset request cards (admin) ─────────────────── */
+.pw-reset-card {
+  background: var(--card-2);
+  border: 1.5px solid #fcd34d;
+  border-radius: var(--r);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.pw-reset-card + .pw-reset-card { margin-top: 10px; }
+.pw-reset-card.resolved {
+  border-color: var(--border);
+  opacity: 0.65;
+}
+.pw-reset-info { flex: 1; min-width: 180px; }
+.pw-reset-name { font-weight: 700; font-size: 14px; color: var(--navy-2); }
+.pw-reset-email { font-size: 12px; color: var(--muted); font-family: monospace; margin: 2px 0 4px; }
+.pw-reset-time { font-size: 11.5px; color: var(--muted-lt); }
+.pw-reset-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }

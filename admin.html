@@ -133,6 +133,15 @@
             </svg>
             Change Password
           </button>
+          <button type="button" class="nav-item" data-view="pw-resets">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            Password Resets
+            <span id="nav-pw-reset-count" class="badge badge-pending" style="margin-left:6px;"></span>
+          </button>
         </div>
       </nav>
 
@@ -274,13 +283,16 @@
           <form id="admin-pw-form" style="max-width:420px;">
             <div style="display:flex;flex-direction:column;gap:12px;">
               <label>Current Password
-                <input id="admin-current-pw" type="password" placeholder="Enter current password" autocomplete="current-password" />
+                <div class="pw-wrap"><input id="admin-current-pw" type="password" placeholder="Enter current password" autocomplete="current-password" />
+                <button type="button" class="eye-btn" data-target="admin-current-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </label>
               <label>New Password
-                <input id="admin-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+                <div class="pw-wrap"><input id="admin-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="admin-new-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </label>
               <label>Confirm New Password
-                <input id="admin-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
+                <div class="pw-wrap"><input id="admin-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="admin-confirm-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </label>
               <p id="admin-pw-msg" style="display:none;font-size:13px;padding:9px 12px;border-radius:8px;margin:0;"></p>
               <div>
@@ -310,10 +322,12 @@
                 </select>
               </label>
               <label>New Password
-                <input id="reset-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+                <div class="pw-wrap"><input id="reset-new-pw" type="password" placeholder="At least 6 characters" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="reset-new-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </label>
               <label>Confirm Password
-                <input id="reset-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
+                <div class="pw-wrap"><input id="reset-confirm-pw" type="password" placeholder="Re-enter new password" autocomplete="new-password" />
+                <button type="button" class="eye-btn" data-target="reset-confirm-pw" title="Show/hide"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
               </label>
               <p id="reset-pw-msg" style="display:none;font-size:13px;padding:9px 12px;border-radius:8px;margin:0;"></p>
               <div>
@@ -328,6 +342,23 @@
             </div>
           </form>
         </div>
+      </div>
+
+      <!-- Password Reset Requests -->
+      <div id="pw-resets" class="section-card admin-section">
+        <h2>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Password Reset Requests
+          <span id="pw-reset-badge" class="badge badge-pending"></span>
+        </h2>
+        <p class="muted" style="margin-bottom:16px;font-size:13px;">
+          Students who forgot their password can submit a request here. Set a new password for them and they can sign in with it.
+        </p>
+        <div id="pw-resets-wrap"></div>
       </div>
 
     </div>

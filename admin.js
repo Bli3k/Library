@@ -642,7 +642,7 @@
   function initAdminNav() {
     const nav = document.querySelector('.admin-nav'); if (!nav) return
     const navItems = nav.querySelectorAll('.nav-item')
-    const views = ['add-edit', 'books', 'requests', 'accounts', 'change-password']
+    const views = ['add-edit', 'books', 'requests', 'accounts', 'change-password', 'pw-resets']
     function show(view) {
       views.forEach(function (v) { const el = document.getElementById(v); if (el) el.style.display = v === view ? '' : 'none' })
       navItems.forEach(function (it) {
@@ -651,6 +651,7 @@
       })
       if (view === 'accounts') renderAccounts()
       if (view === 'change-password') populateStudentSelect()
+      if (view === 'pw-resets') renderPwResets()
       try { window.scrollTo({ top: 0, behavior: 'smooth' }) } catch (e) {}
     }
     navItems.forEach(function (it) { it.addEventListener('click', function () { show(this.dataset.view) }) })
@@ -874,10 +875,130 @@
     })
   }
 
+  // ── Password Reset Requests ────────────────────────────────────────────────
+  var pwResetsWrap = document.getElementById('pw-resets-wrap')
+
+  function renderPwResets() {
+    if (!pwResetsWrap) return
+    var resets  = LibraryAuth.loadPwResets()
+    var pending = resets.filter(function (r) { return r.status === 'pending' })
+
+    // Update badges
+    var badge    = document.getElementById('pw-reset-badge')
+    var navBadge = document.getElementById('nav-pw-reset-count')
+    var badgeTxt = pending.length ? pending.length + ' pending' : ''
+    if (badge)    badge.textContent    = badgeTxt
+    if (navBadge) navBadge.textContent = badgeTxt
+
+    if (resets.length === 0) {
+      pwResetsWrap.innerHTML = '<p class="muted" style="padding:16px 0;">No password reset requests yet.</p>'
+      return
+    }
+
+    // Sort pending first
+    var sorted = resets.slice().sort(function (a, b) {
+      if (a.status === 'pending' && b.status !== 'pending') return -1
+      if (a.status !== 'pending' && b.status === 'pending') return 1
+      return new Date(b.requestedAt) - new Date(a.requestedAt)
+    })
+
+    pwResetsWrap.innerHTML = ''
+    sorted.forEach(function (r) {
+      var card = document.createElement('div')
+      card.className = 'pw-reset-card' + (r.status !== 'pending' ? ' resolved' : '')
+
+      var info = document.createElement('div')
+      info.className = 'pw-reset-info'
+      info.innerHTML = '<div class="pw-reset-name">' + escapeHtml(r.userName) + '</div>'
+        + '<div class="pw-reset-email">' + escapeHtml(r.userEmail) + '</div>'
+        + (r.reason ? '<div class="pw-reset-time" style="color:var(--text-2);margin-bottom:2px;">Reason: ' + escapeHtml(r.reason) + '</div>' : '')
+        + '<div class="pw-reset-time">Requested: ' + new Date(r.requestedAt).toLocaleString() + '</div>'
+        + (r.resolvedAt ? '<div class="pw-reset-time">Resolved: ' + new Date(r.resolvedAt).toLocaleString() + '</div>' : '')
+
+      var actions = document.createElement('div')
+      actions.className = 'pw-reset-actions'
+
+      if (r.status === 'pending') {
+        // New password input + resolve button
+        var pwInput = document.createElement('input')
+        pwInput.type        = 'password'
+        pwInput.placeholder = 'New password (min 6)'
+        pwInput.style.cssText = 'width:160px;font-size:12.5px;padding:7px 10px;'
+
+        var eyeBtn = document.createElement('button')
+        eyeBtn.type      = 'button'
+        eyeBtn.title     = 'Show/hide'
+        eyeBtn.className = 'eye-btn'
+        eyeBtn.style.cssText = 'position:relative;right:auto;bottom:auto;'
+        eyeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+        eyeBtn.addEventListener('click', function () {
+          pwInput.type = pwInput.type === 'password' ? 'text' : 'password'
+        })
+
+        var resolveBtn = document.createElement('button')
+        resolveBtn.type      = 'button'
+        resolveBtn.textContent = 'Set Password'
+        resolveBtn.style.cssText = 'font-size:12px;padding:7px 12px;background:var(--grad-brand);'
+        ;(function (resetId, input) {
+          resolveBtn.addEventListener('click', function () {
+            var np = input.value.trim()
+            var result = LibraryAuth.resolvePasswordResetRequest(resetId, np)
+            if (!result.ok) { alert(result.error); return }
+            alert('Password has been reset successfully. Let the student know they can now sign in with their new password.')
+            renderPwResets()
+            renderAccounts()
+          })
+        })(r.id, pwInput)
+
+        var dismissBtn = document.createElement('button')
+        dismissBtn.type      = 'button'
+        dismissBtn.textContent = 'Dismiss'
+        dismissBtn.style.cssText = 'font-size:12px;padding:7px 10px;background:var(--danger-lt);color:var(--danger);border:1px solid #fca5a5;box-shadow:none;'
+        ;(function (resetId) {
+          dismissBtn.addEventListener('click', function () {
+            if (!confirm('Dismiss this request?')) return
+            LibraryAuth.deletePasswordResetRequest(resetId)
+            renderPwResets()
+          })
+        })(r.id)
+
+        actions.appendChild(pwInput)
+        actions.appendChild(eyeBtn)
+        actions.appendChild(resolveBtn)
+        actions.appendChild(dismissBtn)
+      } else {
+        // Resolved — show badge + delete button
+        var resolvedBadge = document.createElement('span')
+        resolvedBadge.className   = 'badge badge-approved'
+        resolvedBadge.textContent = '✓ Resolved'
+
+        var delBtn = document.createElement('button')
+        delBtn.type      = 'button'
+        delBtn.textContent = 'Delete'
+        delBtn.style.cssText = 'font-size:12px;padding:5px 10px;background:none;color:var(--muted);border:1.5px solid var(--border);box-shadow:none;'
+        ;(function (resetId) {
+          delBtn.addEventListener('click', function () {
+            LibraryAuth.deletePasswordResetRequest(resetId)
+            renderPwResets()
+          })
+        })(r.id)
+
+        actions.appendChild(resolvedBadge)
+        actions.appendChild(delBtn)
+      }
+
+      card.appendChild(info)
+      card.appendChild(actions)
+      pwResetsWrap.appendChild(card)
+    })
+  }
+
   // ── Firebase pull update listeners ────────────────────────────────────────
   window.addEventListener('libraryBooksUpdated', function () {
-    loadBooks(); renderTable(); renderRequests()
-  })
+    loadBooks();
+    renderTable();
+    renderRequests();
+  });
   window.addEventListener('libraryRequestsUpdated', function () {
     renderRequests()
   })
@@ -885,7 +1006,7 @@
   loadBooks()
   try { dedupeStoredBooks() } catch (e) {}
   maybeAutoImportBook1().then(function () {
-    loadBooks(); renderTable(); renderRequests(); initAdminNav()
+    loadBooks(); renderTable(); renderRequests(); renderPwResets(); initAdminNav()
   })
 
   window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
