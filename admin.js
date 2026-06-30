@@ -112,14 +112,38 @@
     } catch (err) { console.warn('dedupeStoredBooks error', err); return { merged: 0, originals: 0 } }
   }
 
-  function preferredOrder() { return ['id', 'title', 'author', 'isbn', 'year', 'copies', 'category'] }
+  // Fields that are internal/technical and should never appear as table columns
+  const EXCLUDED_COLS = new Set([
+    'id', 'sheet', '_synced', '_updatedAt', '_deletedAt'
+  ])
+
+  // The display order for known columns
+  function preferredOrder() {
+    return ['title', 'author', 'isbn', 'year', 'copies', 'category', 'classification', 'sheet']
+  }
 
   function getAllColumns() {
+    // Collect all keys present across all books, excluding internal fields
     const cols = new Set()
-    books.forEach(b => Object.keys(b).forEach(k => cols.add(k)))
-    const pref = preferredOrder(); const ordered = []
-    pref.forEach(p => { if (cols.has(p)) { ordered.push(p); cols.delete(p) } })
-    return ordered.concat(Array.from(cols))
+    books.forEach(function (b) {
+      Object.keys(b).forEach(function (k) {
+        if (!EXCLUDED_COLS.has(k)) cols.add(k)
+      })
+    })
+    // Put preferred columns first, in order, then any remaining extra columns
+    const pref    = preferredOrder()
+    const ordered = []
+    pref.forEach(function (p) { if (cols.has(p)) { ordered.push(p); cols.delete(p) } })
+    // Remaining unknown columns (raw Excel headers like 'INSPECTORS REMARKS…') — skip them
+    // Only add extra cols that look like clean single-word or short field names
+    Array.from(cols).forEach(function (c) {
+      // Skip columns with long names (likely raw Excel headers), internal markers, or all-caps with spaces
+      if (c.length > 30) return
+      if (/[().]/.test(c)) return           // skip parens/dots (e.g. 'IND.STD RATIOS')
+      if (/^[A-Z][A-Z ]+$/.test(c)) return  // skip ALL-CAPS WITH SPACES (Excel headers)
+      ordered.push(c)
+    })
+    return ordered
   }
 
   function escapeHtml(s) {
@@ -178,7 +202,14 @@
     const pageItems  = filtered.slice(startIndex, endIndex)
 
     let html = '<table><thead><tr><th>No.</th>'
-    cols.forEach(c => { html += '<th>' + escapeHtml(c) + '</th>' })
+    cols.forEach(function (c) {
+      // Convert camelCase/snake_case to Title Case for display
+      var label = c
+        .replace(/_/g, ' ')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, function (l) { return l.toUpperCase() })
+      html += '<th>' + escapeHtml(label) + '</th>'
+    })
     html += '<th>Available</th><th>Actions</th></tr></thead><tbody>'
     pageItems.forEach(function (b, idx) {
       const available = LibraryAuth.getAvailableCopies(b)
@@ -589,14 +620,19 @@
           const obj = {}
           Object.keys(row).forEach(function (k) {
             const key = k.trim().toLowerCase()
-            if (/title/.test(key))                                obj.title    = row[k]
-            else if (/author/.test(key))                          obj.author   = row[k]
-            else if (/isbn|issn/.test(key))                       obj.isbn     = row[k]
+            if (/title/.test(key))                                obj.title          = row[k]
+            else if (/author/.test(key))                          obj.author         = row[k]
+            else if (/isbn|issn/.test(key))                       obj.isbn           = row[k]
             else if (/year|^yr$|published|publication|pub\b|publi|date of publication|published date|published_on|release|released|pub date|publication date/.test(key))
-                                                                   obj.year     = extractYear(row[k])
-            else if (/copy|copies|count/.test(key))               obj.copies   = Number(row[k]) || 1
-            else if (/category|genre/.test(key))                  obj.category = row[k]
-            else obj[k.trim()] = row[k]
+                                                                   obj.year           = extractYear(row[k])
+            else if (/copy|copies|count/.test(key))               obj.copies         = Number(row[k]) || 1
+            else if (/category|genre/.test(key))                  obj.category       = row[k]
+            else if (/classif/.test(key))                         obj.classification = row[k]
+            // Skip raw Excel headers: long names, names with parens/dots, or ALL-CAPS WITH SPACES
+            else if (k.trim().length > 30)                        { /* skip junk column */ }
+            else if (/[().]/.test(k.trim()))                      { /* skip parens/dots */ }
+            else if (/^[A-Z][A-Z ]+$/.test(k.trim()))            { /* skip ALL-CAPS headers */ }
+            else                                                   obj[k.trim()] = row[k]
           })
           obj.sheet = sheetName
           if (!obj.category || String(obj.category).trim() === '') obj.category = sheetName

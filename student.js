@@ -336,69 +336,6 @@
         renderRequests()
   }
 
-  // ── Auto-import Book1.xlsx if needed (same logic as admin) ────────────────
-  async function maybeAutoImportBook1() {
-    try {
-      const booksExisting = LibraryAuth.loadBooks() || []
-      const need = booksExisting.some(function (b) { return !b || !String(b.title || '').trim() })
-      if (!need) return
-      const candidates = ['Book1.xlsx', './Book1.xlsx', '../Book1.xlsx', '/Book1.xlsx']
-      for (var pi = 0; pi < candidates.length; pi++) {
-        var p = candidates[pi]
-        try {
-          const res = await fetch(p, { cache: 'no-store' }); if (!res.ok) continue
-          const blob = await res.blob(); if (!blob || blob.size === 0) continue
-          const data = await new Promise(function (resolve, reject) {
-            const reader = new FileReader()
-            reader.onload  = function (e) { resolve(e.target.result) }
-            reader.onerror = function (err) { reject(err) }
-            reader.readAsBinaryString(blob)
-          })
-          const wb = XLSX.read(data, { type: 'binary' })
-          const mappedAll = []
-          wb.SheetNames.forEach(function (sheetName, sidx) {
-            const ws  = wb.Sheets[sheetName]
-            const arr = XLSX.utils.sheet_to_json(ws, { defval: '' })
-            if (!arr || arr.length === 0) return
-            arr.forEach(function (row, i) {
-              const obj = {}
-              Object.keys(row).forEach(function (k) {
-                const key = k.trim().toLowerCase()
-                if (/title/.test(key))           obj.title    = row[k]
-                else if (/author/.test(key))     obj.author   = row[k]
-                else if (/isbn|issn/.test(key))  obj.isbn     = row[k]
-                else if (/year|published|pub\b|publication|release/.test(key)) obj.year = row[k]
-                else if (/cop(y|ies)|count/.test(key)) obj.copies = Number(row[k]) || 1
-                else if (/category|genre/.test(key)) obj.category = row[k]
-                else obj[k.trim()] = row[k]
-              })
-              obj.sheet    = sheetName
-              obj.category = obj.category || sheetName
-              obj.id       = Date.now().toString() + sidx + i + Math.floor(Math.random() * 1000)
-              obj.copies   = obj.copies || 1
-              mappedAll.push(obj)
-            })
-          })
-          if (mappedAll.length === 0) return
-          const books = LibraryAuth.loadBooks() || []
-          const localMap = new Map(books.map(function (b) { return [String(b.id), b] }))
-          let changed = false
-          mappedAll.forEach(function (ro) {
-            const nTitle = (ro.title || '').toString().trim().toLowerCase()
-            const exists = books.find(function (b) { return String(b.title || '').trim().toLowerCase() === nTitle && nTitle !== '' })
-            if (!exists) { localMap.set(String(ro.id), ro); changed = true }
-          })
-          if (changed) {
-            const merged = Array.from(localMap.values())
-            localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(merged))
-            renderBooks(); renderRequests()
-          }
-          return
-        } catch (err) {}
-      }
-    } catch (err) { console.warn('student maybeAutoImportBook1 error', err) }
-  }
-
   // ── Student nav ────────────────────────────────────────────────────────────
   function initStudentNav() {
     const nav = document.querySelector('.student-nav'); if (!nav) return
@@ -445,6 +382,26 @@
   window.addEventListener('libraryRequestsUpdated', function () {
     renderRequests(); renderBooks()  // re-render books so borrow buttons update
   })
+
+  // ── Firebase status pill ───────────────────────────────────────────────────
+  ;(function () {
+    var pill = document.getElementById('firebase-status')
+    if (!pill) return
+    // Already ready?
+    if (window.LibraryFirebase) {
+      pill.textContent = '✓ Synced'
+      pill.className   = 'firebase-status fb-synced'
+    }
+    window.addEventListener('libraryFirebaseReady', function () {
+      pill.textContent = '✓ Synced'
+      pill.className   = 'firebase-status fb-synced'
+    })
+    // Show error if Firebase fails to init
+    window.addEventListener('libraryFirebaseError', function () {
+      pill.textContent = '⚠ Sync Error'
+      pill.className   = 'firebase-status fb-error'
+    })
+  })()
 
   // ── Initial render ─────────────────────────────────────────────────────────
   renderBooks()

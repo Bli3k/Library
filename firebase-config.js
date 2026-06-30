@@ -492,7 +492,8 @@
 
   } catch (err) {
     console.warn('[Firebase] Failed to initialize:', err)
-    updateFirebaseStatus('offline')
+    updateFirebaseStatus('error')
     window.LibraryFirebase = null
+    window.dispatchEvent(new CustomEvent('libraryFirebaseError'))
   }
 })()
