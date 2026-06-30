@@ -274,21 +274,42 @@
       } catch (e) { console.warn('[Firebase] flushDeletedDocs error:', e) }
     }
 
+    // Detect which page we're on — student page is NOT authoritative for books
+    var IS_ADMIN_PAGE = (
+      window.location.pathname.endsWith('admin.html') ||
+      window.location.href.indexOf('admin.html') !== -1
+    )
+
     function applyRemoteBooks(remoteBooks) {
-      var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY)
       var localBooks = LibraryAuth.loadBooks()
+
+      if (!IS_ADMIN_PAGE) {
+        // ── STUDENT / READ-ONLY SIDE ────────────────────────────────────────
+        // Firestore is the single source of truth for books on the student side.
+        // Replace localStorage entirely with whatever Firestore has.
+        // This ensures deletes, edits, and re-imports from admin always show up.
+        if (remoteBooks.length === 0) return  // empty snap — don't wipe, wait for real data
+        var localJSON  = JSON.stringify(localBooks.slice().sort(function(a,b){ return String(a.id).localeCompare(String(b.id)) }))
+        var remoteJSON = JSON.stringify(remoteBooks.slice().sort(function(a,b){ return String(a.id).localeCompare(String(b.id)) }))
+        if (localJSON === remoteJSON) return  // identical — nothing to do
+        localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(remoteBooks))
+        window.dispatchEvent(new CustomEvent('libraryBooksUpdated'))
+        return
+      }
+
+      // ── ADMIN SIDE ──────────────────────────────────────────────────────
+      // Local is authoritative on admin — only pull books that don't exist locally.
+      // Admin edits/deletes/imports are the source of truth; remote only fills gaps.
+      var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY)
       var localMap   = new Map(localBooks.map(function (b) { return [String(b.id), b] }))
       var changed    = false
       remoteBooks.forEach(function (rb) {
         if (!rb || !rb.id) return
-        if (deletedIds.has(String(rb.id))) return  // locally deleted, skip
-        var key   = String(rb.id)
-        var local = localMap.get(key)
-        if (!local) {
-          // New book from Firestore not in local storage
+        if (deletedIds.has(String(rb.id))) return  // admin deleted this, skip
+        var key = String(rb.id)
+        if (!localMap.get(key)) {
           localMap.set(key, rb); changed = true
         }
-        // Local is authoritative for existing books — admin edits here
       })
       if (changed) {
         localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(Array.from(localMap.values())))
@@ -296,17 +317,40 @@
       }
     }
     function pullBooksFromSnap(snap) {
-      if (!snap || snap.empty) return
+      if (!snap) return
       var remoteBooks = []
-      snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+      if (!snap.empty) {
+        snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+      }
+      // Pass empty array on student side so it can clear stale local books
+      // (applyRemoteBooks guards against wiping on genuine empty snaps)
+      if (!IS_ADMIN_PAGE && remoteBooks.length === 0) {
+        // Admin wiped all books — clear student's local list too
+        var localBooks = LibraryAuth.loadBooks()
+        if (localBooks.length > 0) {
+          localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify([]))
+          window.dispatchEvent(new CustomEvent('libraryBooksUpdated'))
+        }
+        return
+      }
       applyRemoteBooks(remoteBooks)
     }
     async function pullBooks() {
       try {
         var snap = await getDocs(collection(db, 'books'))
-        if (snap.empty) return
         var remoteBooks = []
-        snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+        if (!snap.empty) {
+          snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+        }
+        // On student side, empty Firestore means admin cleared all books
+        if (!IS_ADMIN_PAGE && remoteBooks.length === 0) {
+          var localBooks = LibraryAuth.loadBooks()
+          if (localBooks.length > 0) {
+            localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify([]))
+            window.dispatchEvent(new CustomEvent('libraryBooksUpdated'))
+          }
+          return
+        }
         applyRemoteBooks(remoteBooks)
       } catch (e) { console.warn('[Firebase] pullBooks error:', e) }
     }
