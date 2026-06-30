@@ -65,7 +65,10 @@
           }
         }
       })
-      if (changed) saveBooks()
+      if (changed) {
+        // Save year fix locally only — don't push to Firebase (not a real edit)
+        try { localStorage.setItem(LibraryAuth.BOOKS_KEY || 'library_books_v1', JSON.stringify(books)) } catch(e) {}
+      }
     } catch (err) {}
     updateAdminCategoryOptions()
   }
@@ -386,7 +389,30 @@
     var bId    = req.bookId
     var bkList = LibraryAuth.loadBooks()
     var bk     = bkList.find(function (b) { return String(b.id) === String(bId) })
-    if (!bk) { alert('The book for this request no longer exists in the system.'); return }
+    // Fallback: look up by title (covers Electron race where books haven't loaded yet)
+    if (!bk && req.bookTitle) {
+      var tLow = String(req.bookTitle).trim().toLowerCase()
+      bk = bkList.find(function (b) { return String(b.title || '').trim().toLowerCase() === tLow })
+    }
+    // If still not found, wait for Firebase and retry once
+    if (!bk) {
+      if (window.LibraryFirebase && window.LibraryFirebase.pullBooks) {
+        window.LibraryFirebase.pullBooks().then(function () {
+          var refreshed = LibraryAuth.loadBooks()
+          var found = refreshed.find(function (b) { return String(b.id) === String(bId) })
+          if (!found && req.bookTitle) {
+            var tl = String(req.bookTitle).trim().toLowerCase()
+            found = refreshed.find(function (b) { return String(b.title||'').trim().toLowerCase() === tl })
+          }
+          if (!found) { alert('Could not find book. Please wait for sync to complete and try again.'); return }
+          // Re-trigger approve with refreshed data
+          onApprove(e)
+        }).catch(function () { alert('Could not load book data. Please refresh the page.') })
+      } else {
+        alert('Book data is not loaded yet. Please wait a moment and try again.')
+      }
+      return
+    }
     var allReqs      = LibraryAuth.loadRequests()
     var otherBorrowed = allReqs.filter(function (r) {
       return String(r.bookId) === String(bId) &&

@@ -105,6 +105,7 @@
     var collection       = fbStore.collection
     var doc              = fbStore.doc
     var getDocs          = fbStore.getDocs
+    var getDocsFromServer = fbStore.getDocsFromServer || fbStore.getDocs
     var deleteDoc        = fbStore.deleteDoc
     var writeBatch       = fbStore.writeBatch
     var serverTimestamp  = fbStore.serverTimestamp
@@ -114,8 +115,21 @@
     var db  = getFirestore(app)
 
     // ── SYNC BOOKS ──────────────────────────────────────────────────────────
-    var syncBooksRaw = async function (books) {
+    var _lastSyncedBooksHash = null
+    function hashBooks(books) {
+      // Lightweight hash: JSON of sorted ids + copies count
+      try {
+        var sig = books.map(function(b){ return b.id + ':' + (b.copies||0) }).sort().join('|')
+        return sig
+      } catch(e) { return '' }
+    }
+    var syncBooksRaw = async function (books, force) {
       if (!Array.isArray(books) || books.length === 0) return
+      var hash = hashBooks(books)
+      if (!force && hash && hash === _lastSyncedBooksHash) {
+        console.log('[Firebase] syncBooks: no change, skipping push')
+        return
+      }
       try {
         var valid = books.filter(function (b) { return b && b.id })
         await commitInChunks(db, valid, writeBatch, function (batch, b) {
@@ -126,6 +140,7 @@
           })
           batch.set(ref, data, { merge: true })
         })
+        _lastSyncedBooksHash = hash
         updateFirebaseStatus('synced')
       } catch (e) {
         console.warn('[Firebase] syncBooks error:', e)
@@ -259,179 +274,197 @@
       } catch (e) { console.warn('[Firebase] flushDeletedDocs error:', e) }
     }
 
+    function applyRemoteBooks(remoteBooks) {
+      var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY)
+      var localBooks = LibraryAuth.loadBooks()
+      var localMap   = new Map(localBooks.map(function (b) { return [String(b.id), b] }))
+      var changed    = false
+      remoteBooks.forEach(function (rb) {
+        if (!rb || !rb.id) return
+        if (deletedIds.has(String(rb.id))) return  // locally deleted, skip
+        var key   = String(rb.id)
+        var local = localMap.get(key)
+        if (!local) {
+          // New book from Firestore not in local storage
+          localMap.set(key, rb); changed = true
+        }
+        // Local is authoritative for existing books — admin edits here
+      })
+      if (changed) {
+        localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(Array.from(localMap.values())))
+        window.dispatchEvent(new CustomEvent('libraryBooksUpdated'))
+      }
+    }
+    function pullBooksFromSnap(snap) {
+      if (!snap || snap.empty) return
+      var remoteBooks = []
+      snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+      applyRemoteBooks(remoteBooks)
+    }
     async function pullBooks() {
       try {
         var snap = await getDocs(collection(db, 'books'))
         if (snap.empty) return
-        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_BOOKS_KEY)
         var remoteBooks = []
-        snap.forEach(function (d) {
-          if (!deletedIds.has(String(d.id))) remoteBooks.push(stripInternalFields(d.data()))
-        })
-        var localBooks = LibraryAuth.loadBooks()
-        var localMap   = new Map(localBooks.map(function (b) { return [String(b.id), b] }))
-        var changed    = false
-        remoteBooks.forEach(function (rb) {
-          if (!rb || !rb.id) return
-          var key   = String(rb.id)
-          var local = localMap.get(key)
-          if (!local) {
-            // Book exists in Firestore but not locally — add it
-            localMap.set(key, rb); changed = true
-          }
-          // If book exists locally, keep local copy — it is authoritative.
-          // The admin edits books on this device; remote is only used to add missing books.
-        })
-        if (changed) {
-          localStorage.setItem(LibraryAuth.BOOKS_KEY, JSON.stringify(Array.from(localMap.values())))
-          window.dispatchEvent(new CustomEvent('libraryBooksUpdated'))
-        }
+        snap.forEach(function (d) { remoteBooks.push(stripInternalFields(d.data())) })
+        applyRemoteBooks(remoteBooks)
       } catch (e) { console.warn('[Firebase] pullBooks error:', e) }
     }
 
     // ── PULL REQUESTS ───────────────────────────────────────────────────────
+    function applyRemoteRequests(remoteReqs) {
+      var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_REQUESTS_KEY)
+      var localReqs = LibraryAuth.loadRequests()
+      var localMap  = new Map(localReqs.map(function (r) { return [String(r.id), r] }))
+      var changed   = false
+      remoteReqs.forEach(function (rr) {
+        if (!rr || !rr.id) return
+        if (deletedIds.has(String(rr.id))) return
+        var key   = String(rr.id)
+        var local = localMap.get(key)
+        if (!local) {
+          localMap.set(key, rr); changed = true
+        } else {
+          var remoteActed   = rr.status !== 'pending' && local.status === 'pending'
+          var remoteNewer   = rr.reviewedAt && local.reviewedAt &&
+                              new Date(rr.reviewedAt).getTime() > new Date(local.reviewedAt).getTime()
+          // Accept remote returnedAt in all cases where remote has it and local doesn't match
+          var remoteReturn  = rr.returnedAt && (rr.returnedAt !== local.returnedAt)
+          // Also accept if remote cleared returnedAt (e.g. admin un-returned — rare but safe)
+          var remoteUnreturn = !rr.returnedAt && local.returnedAt && rr.status === local.status
+          if (remoteActed || remoteNewer || remoteReturn || remoteUnreturn) {
+            localMap.set(key, rr); changed = true
+          }
+        }
+      })
+      if (changed) {
+        localStorage.setItem(LibraryAuth.REQUESTS_KEY, JSON.stringify(Array.from(localMap.values())))
+        window.dispatchEvent(new CustomEvent('libraryRequestsUpdated'))
+      }
+    }
+    function pullRequestsFromSnap(snap) {
+      if (!snap || snap.empty) return
+      var remoteReqs = []
+      snap.forEach(function (d) { remoteReqs.push(stripInternalFields(d.data())) })
+      applyRemoteRequests(remoteReqs)
+    }
     async function pullRequests() {
       try {
         var snap = await getDocs(collection(db, 'borrowRequests'))
         if (snap.empty) return
-        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_REQUESTS_KEY)
         var remoteReqs = []
-        snap.forEach(function (d) {
-          if (!deletedIds.has(String(d.id))) remoteReqs.push(stripInternalFields(d.data()))
-        })
-        var localReqs = LibraryAuth.loadRequests()
-        var localMap  = new Map(localReqs.map(function (r) { return [String(r.id), r] }))
-        var changed   = false
-        remoteReqs.forEach(function (rr) {
-          if (!rr || !rr.id) return
-          var key   = String(rr.id)
-          var local = localMap.get(key)
-          if (!local) {
-            // New request from another device
-            localMap.set(key, rr); changed = true
-          } else {
-            // Remote wins if:
-            // 1. Remote status is not pending and local is still pending (admin acted)
-            // 2. Remote has a newer reviewedAt timestamp
-            // 3. Remote has returnedAt set but local doesn't
-            var remoteActed  = rr.status !== 'pending' && local.status === 'pending'
-            var remoteNewer  = rr.reviewedAt && local.reviewedAt &&
-                               new Date(rr.reviewedAt).getTime() > new Date(local.reviewedAt).getTime()
-            var remoteReturn = rr.returnedAt && !local.returnedAt
-            if (remoteActed || remoteNewer || remoteReturn) {
-              localMap.set(key, rr); changed = true
-            }
-          }
-        })
-        if (changed) {
-          localStorage.setItem(LibraryAuth.REQUESTS_KEY, JSON.stringify(Array.from(localMap.values())))
-          window.dispatchEvent(new CustomEvent('libraryRequestsUpdated'))
-        }
+        snap.forEach(function (d) { remoteReqs.push(stripInternalFields(d.data())) })
+        applyRemoteRequests(remoteReqs)
       } catch (e) { console.warn('[Firebase] pullRequests error:', e) }
     }
 
+    function applyRemotePwResets(remoteResets) {
+      var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_PW_RESET_KEY)
+      var localResets = LibraryAuth.loadPwResets ? LibraryAuth.loadPwResets() : []
+      var localMap = new Map(localResets.map(function (r) { return [String(r.id), r] }))
+      var changed = false
+      remoteResets.forEach(function (rr) {
+        if (!rr || !rr.id) return
+        if (deletedIds.has(String(rr.id))) return
+        var key = String(rr.id)
+        var local = localMap.get(key)
+        if (!local) {
+          // New reset request not seen locally — always add it
+          localMap.set(key, rr); changed = true
+        } else if (rr.status !== local.status) {
+          localMap.set(key, rr); changed = true
+        } else if (rr.resolvedAt && !local.resolvedAt) {
+          localMap.set(key, rr); changed = true
+        }
+      })
+      if (changed) {
+        localStorage.setItem(LibraryAuth.PW_RESET_KEY, JSON.stringify(Array.from(localMap.values())))
+        window.dispatchEvent(new CustomEvent('libraryPwResetsUpdated'))
+      }
+    }
+    function pullPwResetsFromSnap(snap) {
+      if (!snap || snap.empty) return
+      var remoteResets = []
+      snap.forEach(function (d) { remoteResets.push(stripInternalFields(d.data())) })
+      applyRemotePwResets(remoteResets)
+    }
     async function pullPwResets() {
       try {
-        var snap = await getDocs(collection(db, 'pwResetRequests'))
-        if (snap.empty) return
-        var deletedIds = readDeletedIdSet(LibraryAuth.DELETED_PW_RESET_KEY)
+        // Use getDocsFromServer to bypass Firestore's local cache so we always
+        // get the freshest reset requests (avoids admin seeing stale empty list)
+        var getFromServer = fbStore.getDocsFromServer || getDocs
+        var snap = await getFromServer(collection(db, 'pwResetRequests'))
+        // Don't return early on empty — we still need to dispatch the update
+        // so the UI clears any stale entries
         var remoteResets = []
-        snap.forEach(function (d) {
-          if (!deletedIds.has(String(d.id))) remoteResets.push(stripInternalFields(d.data()))
-        })
-        var localResets = LibraryAuth.loadPwResets ? LibraryAuth.loadPwResets() : []
-        var localMap = new Map(localResets.map(function (r) { return [String(r.id), r] }))
-        var changed = false
-        remoteResets.forEach(function (rr) {
-          if (!rr || !rr.id) return
-          var key = String(rr.id)
-          var local = localMap.get(key)
-          if (!local) {
-            localMap.set(key, rr); changed = true
-          } else if (rr.status !== local.status) {
-            localMap.set(key, rr); changed = true
-          } else if (rr.resolvedAt && local.resolvedAt) {
-            var rt = new Date(rr.resolvedAt).getTime()
-            var lt = new Date(local.resolvedAt).getTime()
-            if (!isNaN(rt) && !isNaN(lt) && rt > lt) { localMap.set(key, rr); changed = true }
-          }
-        })
-        if (changed) {
-          localStorage.setItem(LibraryAuth.PW_RESET_KEY, JSON.stringify(Array.from(localMap.values())))
-          window.dispatchEvent(new CustomEvent('libraryPwResetsUpdated'))
-        }
+        snap.forEach(function (d) { remoteResets.push(stripInternalFields(d.data())) })
+        applyRemotePwResets(remoteResets)
+        // Always fire the update event so the UI re-renders
+        window.dispatchEvent(new CustomEvent('libraryPwResetsUpdated'))
       } catch (e) { console.warn('[Firebase] pullPwResets error:', e) }
     }
 
-    // ── PULL USERS — detect deleted accounts ────────────────────────────────
-    // If a user was deleted from Firestore by the admin on another device,
-    // remove them from localStorage so they don't come back
+    // ── PULL USERS ────────────────────────────────────────────────────────────
+    function applyRemoteUsers(snap) {
+      var remoteIds = new Set()
+      var remoteUsers = []
+      snap.forEach(function (d) {
+        remoteIds.add(d.id)
+        var data = stripInternalFields(d.data())
+        data.id = data.id || d.id
+        remoteUsers.push(data)
+      })
+      if (remoteIds.size === 0) return  // Firestore empty — never wipe locals
+      var localUsers = LibraryAuth.loadUsers()
+      var admins     = localUsers.filter(function (u) { return u.role !== 'student' })
+      var localMap   = new Map(localUsers.filter(function (u) { return u.role === 'student' }).map(function (u) { return [String(u.id), u] }))
+      var changed    = false
+      remoteUsers.forEach(function (ru) {
+        if (!ru || !ru.id || ru.role === 'admin') return
+        var key   = String(ru.id)
+        var local = localMap.get(key)
+        if (!local) {
+          localMap.set(key, ru); changed = true
+        } else {
+          Object.keys(ru).forEach(function (k) {
+            if (k === 'id' || k === 'role') return
+            if (ru[k] !== undefined && ru[k] !== null && String(ru[k]).trim() !== '' && local[k] !== ru[k]) {
+              local[k] = ru[k]; changed = true
+            }
+          })
+        }
+      })
+      var nowMs    = Date.now()
+      var students = Array.from(localMap.values())
+      var kept     = students.filter(function (u) {
+        if (remoteIds.has(String(u.id))) return true
+        var age = u.createdAt ? (nowMs - new Date(u.createdAt).getTime()) : Infinity
+        return age < 30000  // brand-new — keep until debounce sync finishes
+      })
+      var removed = students.length - kept.length
+      if (removed > 0 || changed) {
+        localStorage.setItem(LibraryAuth.USERS_KEY, JSON.stringify(admins.concat(kept)))
+        window.dispatchEvent(new CustomEvent('libraryUsersUpdated'))
+      }
+    }
+    function pullUsersFromSnap(snap) { if (snap) applyRemoteUsers(snap) }
     async function pullUsers() {
       try {
         var snap = await getDocs(collection(db, 'users'))
-        var remoteIds = new Set()
-        var remoteUsers = []
-        snap.forEach(function (d) {
-          remoteIds.add(d.id)
-          var data = stripInternalFields(d.data())
-          data.id = data.id || d.id
-          remoteUsers.push(data)
-        })
-        var localUsers   = LibraryAuth.loadUsers()
-        var admins       = localUsers.filter(function (u) { return u.role !== 'student' })
-        var localMap     = new Map(localUsers.filter(function (u) { return u.role === 'student' }).map(function (u) { return [String(u.id), u] }))
-        var changed      = false
-        remoteUsers.forEach(function (ru) {
-          if (!ru || !ru.id || ru.role === 'admin') return
-          var key = String(ru.id)
-          var local = localMap.get(key)
-          if (!local) {
-            localMap.set(key, ru)
-            changed = true
-          } else {
-            Object.keys(ru).forEach(function (k) {
-              if (k === 'id' || k === 'role') return
-              if (ru[k] !== undefined && ru[k] !== null && String(ru[k]).trim() !== '' && local[k] !== ru[k]) {
-                local[k] = ru[k]
-                changed = true
-              }
-            })
-          }
-        })
-        var students = Array.from(localMap.values())
-        // Guard: if Firestore is empty, never wipe local students
-        if (remoteIds.size === 0) return
-
-        // Only remove a student if:
-        //  1. They exist in Firestore at all (remoteIds.size > 0 means we got a real snapshot)
-        //  2. Their ID is NOT in Firestore — meaning admin explicitly deleted them
-        //  3. They are NOT brand-new (createdAt within last 30 seconds) — give debounce time to sync
-        var nowMs = Date.now()
-        var kept    = students.filter(function (u) {
-          if (remoteIds.has(String(u.id))) return true  // still in Firestore, keep
-          // Check if this is a very recently registered student not yet synced
-          var age = u.createdAt ? (nowMs - new Date(u.createdAt).getTime()) : Infinity
-          if (age < 30000) return true  // less than 30 s old — keep, sync pending
-          return false  // absent from Firestore and old enough — admin deleted, remove
-        })
-        var removed = students.length - kept.length
-        if (removed > 0 || changed) {
-          var merged = admins.concat(kept)
-          localStorage.setItem(LibraryAuth.USERS_KEY, JSON.stringify(merged))
-          if (removed > 0) console.log('[Firebase] pullUsers: removed', removed, 'deleted accounts from localStorage')
-          window.dispatchEvent(new CustomEvent('libraryUsersUpdated'))
-        }
+        applyRemoteUsers(snap)
       } catch (e) { console.warn('[Firebase] pullUsers error:', e) }
     }
 
     // ── SYNC ALL ─────────────────────────────────────────────────────────────
     async function syncAll() {
       try {
-        var books    = LibraryAuth.loadBooks()
+        // Do NOT re-sync books here — books are only pushed when the admin
+        // explicitly imports, adds, or edits them. This prevents duplication
+        // and stops the continuous re-sync loop.
         var requests = LibraryAuth.loadRequests()
         var users    = LibraryAuth.loadUsers ? LibraryAuth.loadUsers() : []
         var resets   = LibraryAuth.loadPwResets ? LibraryAuth.loadPwResets() : []
-        await Promise.all([syncBooksRaw(books), syncRequestsRaw(requests), syncUsersRaw(users), syncPwResetsRaw(resets)])
+        await Promise.all([syncRequestsRaw(requests), syncUsersRaw(users), syncPwResetsRaw(resets)])
       } catch (e) { console.warn('[Firebase] syncAll error:', e) }
     }
 
@@ -451,6 +484,7 @@
     window.addEventListener('online', async function () {
       updateFirebaseStatus('connecting')
       try {
+        // Pull all collections; syncAll pushes requests/users/resets (not books)
         await Promise.all([pullBooks(), pullRequests(), pullUsers(), pullPwResets()])
         await syncAll()
         updateFirebaseStatus('synced')
@@ -460,22 +494,31 @@
 
     // ── INITIAL LOAD ──────────────────────────────────────────────────────────
     await flushDeletedDocs()
-    await Promise.all([pullBooks(), pullRequests(), pullUsers(), pullPwResets()])
+    // Pull books FIRST so book IDs are in localStorage before requests arrive.
+    // This fixes the Electron desktop race: requests reference bookIds that
+    // don't exist yet if books and requests are fetched in parallel.
+    await pullBooks()
+    await Promise.all([pullRequests(), pullUsers(), pullPwResets()])
     await syncAll()
     updateFirebaseStatus('synced')
 
     // ── REAL-TIME LISTENERS ───────────────────────────────────────────────────
+    // Use snapshot data directly — avoids getDocs returning stale cache
     onSnapshot(collection(db, 'books'), function (snap) {
-      if (!snap.metadata.hasPendingWrites) pullBooks()
+      if (snap.metadata.hasPendingWrites) return
+      pullBooksFromSnap(snap)
     })
     onSnapshot(collection(db, 'borrowRequests'), function (snap) {
-      if (!snap.metadata.hasPendingWrites) pullRequests()
+      if (snap.metadata.hasPendingWrites) return
+      pullRequestsFromSnap(snap)
     })
     onSnapshot(collection(db, 'pwResetRequests'), function (snap) {
-      if (!snap.metadata.hasPendingWrites) pullPwResets()
+      if (snap.metadata.hasPendingWrites) return
+      pullPwResetsFromSnap(snap)
     })
     onSnapshot(collection(db, 'users'), function (snap) {
-      if (!snap.metadata.hasPendingWrites) pullUsers()
+      if (snap.metadata.hasPendingWrites) return
+      pullUsersFromSnap(snap)
     })
 
     startPeriodicSync()
