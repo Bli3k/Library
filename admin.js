@@ -297,8 +297,8 @@
     sorted.forEach(function (req) {
       var actions = '—'
       if (req.status === 'pending') {
-        actions = '<button class="btn-link small approve" data-id="' + req.id + '" data-action="approve">Approve</button> '
-               + '<button class="btn-link small reject" data-id="' + req.id + '" data-action="reject">Reject</button>'
+        actions = '<button class="btn-link small approve" data-id="' + escapeHtml(String(req.id)) + '" data-book-id="' + escapeHtml(String(req.bookId)) + '" data-action="approve">Approve</button> '
+               + '<button class="btn-link small reject" data-id="' + escapeHtml(String(req.id)) + '" data-action="reject">Reject</button>'
       } else if (req.status === 'approved' && !req.returnedAt) {
         actions = '<button class="btn-link small approve" data-id="' + req.id + '" data-action="mark-returned" style="background:var(--green-lt);border-color:#6ee7b7;color:var(--green-md);">&#10003; Mark Returned</button>'
                + ' <button class="btn-link small" data-id="' + req.id + '" data-action="notify-return" style="background:var(--amber-lt);border-color:#fcd34d;color:var(--amber);">&#128276; Notify</button>'
@@ -339,8 +339,37 @@
   }
 
   function onApprove(e) {
-    var id = e.currentTarget.dataset.id
-    if (!confirmAction('Approve this borrow request?')) return
+    var id     = e.currentTarget.dataset.id
+    var bookId = e.currentTarget.dataset.bookId
+
+    // Pre-check: make sure request is still pending in localStorage
+    var reqs = LibraryAuth.loadRequests()
+    var req  = reqs.find(function (r) { return String(r.id) === String(id) })
+    if (!req) { alert('Request not found. Please refresh the page.'); renderRequests(); return }
+    if (req.status !== 'pending') {
+      alert('This request was already ' + req.status + '. Refreshing the list.')
+      renderRequests(); return
+    }
+
+    // Pre-check copies — exclude the current pending request from the borrowed count
+    var bId    = req.bookId
+    var bkList = LibraryAuth.loadBooks()
+    var bk     = bkList.find(function (b) { return String(b.id) === String(bId) })
+    if (!bk) { alert('The book for this request no longer exists in the system.'); return }
+    var allReqs      = LibraryAuth.loadRequests()
+    var otherBorrowed = allReqs.filter(function (r) {
+      return String(r.bookId) === String(bId) &&
+             r.status === 'approved' &&
+             !r.returnedAt &&
+             r.id !== req.id
+    }).length
+    var avail = Math.max(0, (Number(bk.copies) || 0) - otherBorrowed)
+    if (avail <= 0) {
+      alert('No copies of "' + (bk.title || 'this book') + '" are currently available. Please reject this request or add more copies first.')
+      return
+    }
+
+    if (!confirmAction('Approve this borrow request? (' + avail + ' cop' + (avail === 1 ? 'y' : 'ies') + ' available)')) return
     var result = LibraryAuth.updateBorrowRequest(id, 'approved', '')
     if (!result.ok) { alert(result.error); return }
     renderTable(); renderRequests()
@@ -723,6 +752,120 @@
   var accountsWrap   = document.getElementById('accounts-wrap')
   var accountsSearch = document.getElementById('accounts-search')
 
+  // ── Add Student modal ─────────────────────────────────────────────────────
+  function openAddStudentModal() {
+    // Remove existing modal if any
+    var existing = document.getElementById('add-student-modal')
+    if (existing) existing.remove()
+
+    var overlay = document.createElement('div')
+    overlay.id = 'add-student-modal'
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,22,40,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;-webkit-app-region:no-drag;user-select:auto;'
+
+    var box = document.createElement('div')
+    box.style.cssText = 'background:var(--card);border-radius:var(--r-lg);padding:28px;max-width:520px;width:100%;box-shadow:var(--sh-xl);position:relative;max-height:90vh;overflow-y:auto;-webkit-app-region:no-drag;user-select:auto;'
+
+    var closeBtn = document.createElement('button')
+    closeBtn.type = 'button'
+    closeBtn.innerHTML = '&times;'
+    closeBtn.style.cssText = 'position:absolute;top:12px;right:14px;background:none;border:none;box-shadow:none;font-size:22px;color:var(--muted);cursor:pointer;padding:0;min-height:unset;line-height:1;transform:none;'
+    closeBtn.addEventListener('click', function () { overlay.remove() })
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove() })
+
+    box.innerHTML = '<h3 style="margin:0 0 4px;font-size:17px;font-weight:800;color:var(--navy-2);">Add New Student</h3>'
+      + '<p style="margin:0 0 18px;font-size:13px;color:var(--muted);">Fill in the student details. They can log in with their email and the password you set.</p>'
+      + '<div style="display:flex;flex-direction:column;gap:12px;">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Full Name<input id="as-name" type="text" placeholder="Juan Dela Cruz" style="margin-top:2px;" /></label>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Age<input id="as-age" type="number" min="1" max="120" placeholder="18" style="margin-top:2px;" /></label>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Course/Strand<input id="as-course" type="text" placeholder="STEM" style="margin-top:2px;" /></label>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Year/Level<input id="as-year" type="text" placeholder="Grade 11" style="margin-top:2px;" /></label>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Section<input id="as-section" type="text" placeholder="A" style="margin-top:2px;" /></label>'
+      + '</div>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Address<input id="as-address" type="text" placeholder="Complete home address" style="margin-top:2px;" /></label>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Email<input id="as-email" type="email" placeholder="student@email.com" style="margin-top:2px;" /></label>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Contact Number<input id="as-contact" type="tel" maxlength="11" placeholder="09XXXXXXXXX" style="margin-top:2px;" /></label>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Password<input id="as-password" type="password" placeholder="At least 6 characters" style="margin-top:2px;" /></label>'
+      + '<label style="display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;">Confirm Password<input id="as-confirm" type="password" placeholder="Re-enter password" style="margin-top:2px;" /></label>'
+      + '</div>'
+      + '<p id="as-msg" style="display:none;font-size:13px;padding:9px 12px;border-radius:8px;margin:0;"></p>'
+      + '</div>'
+
+    var footer = document.createElement('div')
+    footer.style.cssText = 'display:flex;gap:10px;margin-top:20px;'
+
+    var submitBtn = document.createElement('button')
+    submitBtn.type = 'button'
+    submitBtn.textContent = 'Create Account'
+    submitBtn.style.cssText = 'flex:1;background:var(--grad-brand);'
+    submitBtn.addEventListener('click', function () {
+      var name    = (document.getElementById('as-name').value    || '').trim()
+      var age     = (document.getElementById('as-age').value     || '').trim()
+      var course  = (document.getElementById('as-course').value  || '').trim()
+      var yr      = (document.getElementById('as-year').value    || '').trim()
+      var section = (document.getElementById('as-section').value || '').trim()
+      var address = (document.getElementById('as-address').value || '').trim()
+      var email   = (document.getElementById('as-email').value   || '').trim()
+      var contact = (document.getElementById('as-contact').value || '').trim()
+      var pw      = (document.getElementById('as-password').value || '')
+      var cpw     = (document.getElementById('as-confirm').value  || '')
+
+      function asMsg(txt, type) {
+        var el = document.getElementById('as-msg')
+        if (!el) return
+        el.textContent = txt
+        el.style.display = 'block'
+        el.style.background = type === 'error' ? 'var(--danger-lt)' : 'var(--green-lt)'
+        el.style.color      = type === 'error' ? 'var(--danger)' : 'var(--green-md)'
+        el.style.borderLeft = type === 'error' ? '3px solid var(--danger)' : '3px solid var(--green)'
+      }
+
+      if (!name)    return asMsg('Full name is required.', 'error')
+      if (!email)   return asMsg('Email is required.', 'error')
+      if (!pw)      return asMsg('Password is required.', 'error')
+      if (pw.length < 6) return asMsg('Password must be at least 6 characters.', 'error')
+      if (pw !== cpw)    return asMsg('Passwords do not match.', 'error')
+      if (contact && !/^[0-9]{11}$/.test(contact)) return asMsg('Contact number must be exactly 11 digits.', 'error')
+
+      var result = LibraryAuth.register({
+        name, age, courseStrand: course, year: yr, section, address, email,
+        contactNumber: contact, password: pw
+      })
+      if (!result.ok) return asMsg(result.error, 'error')
+
+      asMsg('Student account created successfully!', 'success')
+      setTimeout(function () {
+        overlay.remove()
+        renderAccounts()
+        populateStudentSelect()
+      }, 1200)
+    })
+
+    var cancelBtn = document.createElement('button')
+    cancelBtn.type = 'button'
+    cancelBtn.textContent = 'Cancel'
+    cancelBtn.style.cssText = 'background:none;border:1.5px solid var(--border);color:var(--muted);box-shadow:none;'
+    cancelBtn.addEventListener('click', function () { overlay.remove() })
+
+    footer.appendChild(submitBtn)
+    footer.appendChild(cancelBtn)
+    box.appendChild(closeBtn)
+    box.appendChild(footer)
+    overlay.appendChild(box)
+    document.body.appendChild(overlay)
+
+    // Focus first input after modal is in DOM
+    setTimeout(function () {
+      var first = document.getElementById('as-name')
+      if (first) first.focus()
+    }, 50)
+  }
+
   function renderAccounts(q) {
     if (!accountsWrap) return
     var users    = LibraryAuth.loadUsers()
@@ -743,10 +886,24 @@
       accountsWrap.innerHTML = '<p class="muted" style="padding:16px 0;">' +
         (students.length === 0 ? 'No student accounts registered yet.' : 'No accounts match your search.') +
         '</p>'
-      return
+      // Still render add button even when empty
     }
 
     accountsWrap.innerHTML = ''
+
+    // ── Add Student header button ──────────────────────────────────────────
+    var addBar = document.createElement('div')
+    addBar.style.cssText = 'display:flex;justify-content:flex-end;margin-bottom:14px;'
+    var addStudentBtn = document.createElement('button')
+    addStudentBtn.type = 'button'
+    addStudentBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="display:inline;margin-right:5px;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>Add Student'
+    addStudentBtn.style.cssText = 'background:var(--grad-brand);font-size:13px;'
+    addStudentBtn.addEventListener('click', openAddStudentModal)
+    addBar.appendChild(addStudentBtn)
+    accountsWrap.appendChild(addBar)
+
+    if (filtered.length === 0) return
+
     filtered.forEach(function (u) {
       var card = document.createElement('div')
       card.className = 'account-card'
@@ -832,7 +989,22 @@
         })
       })(u.id)
 
+      var deleteStudentBtn = document.createElement('button')
+      deleteStudentBtn.type = 'button'
+      deleteStudentBtn.textContent = 'Delete Account'
+      deleteStudentBtn.style.cssText = 'font-size:12px;padding:6px 12px;background:var(--danger-lt);color:var(--danger);border:1.5px solid #fca5a5;box-shadow:none;'
+      ;(function (uid, uname) {
+        deleteStudentBtn.addEventListener('click', function () {
+          if (!confirm('Delete the account for ' + uname + '?\n\nThis cannot be undone. The student will no longer be able to log in.')) return
+          var result = LibraryAuth.deleteUser(uid)
+          if (!result.ok) { alert(result.error); return }
+          renderAccounts()
+          populateStudentSelect()
+        })
+      })(u.id, u.name || 'this student')
+
       actions.appendChild(resetBtn)
+      actions.appendChild(deleteStudentBtn)
       card.appendChild(info)
       card.appendChild(actions)
       accountsWrap.appendChild(card)
@@ -974,7 +1146,10 @@
         var pwInput = document.createElement('input')
         pwInput.type        = 'password'
         pwInput.placeholder = 'New password (min 6)'
-        pwInput.style.cssText = 'width:160px;font-size:12.5px;padding:7px 10px;'
+        pwInput.tabIndex    = 0
+        pwInput.style.cssText = 'width:160px;font-size:12.5px;padding:7px 10px;-webkit-user-select:auto;user-select:auto;pointer-events:auto;'
+        // Electron fix: force focus on click
+        pwInput.addEventListener('mousedown', function (e) { e.stopPropagation(); setTimeout(function () { pwInput.focus() }, 0) })
 
         var eyeBtn = document.createElement('button')
         eyeBtn.type      = 'button'

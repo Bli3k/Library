@@ -177,6 +177,8 @@
       }
     }
     var syncPwResets = debounce(syncPwResetsRaw, 1200)
+    // Non-debounced version — used by forgot-password.js so request reaches Firestore immediately
+    var syncPwResetsNow = syncPwResetsRaw
 
     // Sync student accounts so desktop and web app instances share logins.
     var syncUsersRaw = async function (users) {
@@ -479,7 +481,7 @@
     startPeriodicSync()
 
     window.LibraryFirebase = {
-      syncBooks, syncRequests, syncRequestsNow, syncUsers, syncUsersNow, syncPwResets, syncAll,
+      syncBooks, syncRequests, syncRequestsNow, syncUsers, syncUsersNow, syncPwResets, syncPwResetsNow, syncAll,
       pullBooks, pullRequests, pullUsers, pullPwResets,
       deleteUser, deleteRequest, deleteBook, deletePwReset,
       db

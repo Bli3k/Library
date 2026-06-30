@@ -271,7 +271,7 @@
       </div>
 
       <!-- Passwords (combined: reset requests + change password) -->
-      <div id="passwords" class="section-card admin-section">
+      <div id="passwords" class="section-card admin-section" style="-webkit-app-region:no-drag;">
 
         <!-- ① Password Reset Requests from students -->
         <h2 style="margin-bottom:6px;">
@@ -294,7 +294,7 @@
           <p class="muted" style="margin-bottom:16px;font-size:13px;">
             Use this to assign a new password directly without waiting for a student request.
           </p>
-          <form id="reset-pw-form" style="max-width:420px;">
+          <form id="reset-pw-form" style="max-width:420px;-webkit-app-region:no-drag;">
             <div style="display:flex;flex-direction:column;gap:12px;">
               <label>Student Account
                 <select id="reset-student-select">
@@ -326,7 +326,7 @@
         <!-- ③ Admin changes their own password -->
         <div style="margin-top:32px;padding-top:24px;border-top:2px dashed var(--border);">
           <div class="form-section-label" style="margin-bottom:14px;">Change Your Admin Password</div>
-          <form id="admin-pw-form" style="max-width:420px;">
+          <form id="admin-pw-form" style="max-width:420px;-webkit-app-region:no-drag;">
             <div style="display:flex;flex-direction:column;gap:12px;">
               <label>Current Password
                 <div class="pw-wrap"><input id="admin-current-pw" type="password" placeholder="Enter current password" autocomplete="current-password" />

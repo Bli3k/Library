@@ -292,9 +292,19 @@
     const req = requests[idx]
     if (req.status !== 'pending') return { ok: false, error: 'This request has already been reviewed.' }
     if (status === 'approved') {
-      const books = loadBooks()
-      const book = books.find((b) => String(b.id) === String(req.bookId))
-      if (!book || getAvailableCopies(book) <= 0) return { ok: false, error: 'No copies available to approve this request.' }
+      const books   = loadBooks()
+      const book    = books.find((b) => String(b.id) === String(req.bookId))
+      if (!book) return { ok: false, error: 'Book no longer exists in the system.' }
+      // Count only OTHER approved (not-returned) requests for this book,
+      // excluding the current request which is still pending.
+      const otherApproved = requests.filter((r) =>
+        String(r.bookId) === String(req.bookId) &&
+        r.status === 'approved' &&
+        !r.returnedAt &&
+        r.id !== req.id
+      ).length
+      const available = Math.max(0, (Number(book.copies) || 0) - otherApproved)
+      if (available <= 0) return { ok: false, error: 'No copies available to approve this request.' }
     }
     requests[idx] = Object.assign({}, req, {
       status,
@@ -395,10 +405,19 @@
     var userIdx  = users.findIndex(function (u) { return u.id === req.userId })
     if (userIdx < 0) return { ok: false, error: 'Student account no longer exists.' }
     users[userIdx].password = newPassword
-    saveUsers(users)
-    // Mark reset as resolved
+    // Push password change to Firestore immediately so student can log in right away
+    saveUsersImmediate(users)
+    // Mark reset as resolved and push that too
     resets[idx] = Object.assign({}, req, { status: 'resolved', resolvedAt: new Date().toISOString() })
-    savePwResets(resets)
+    // Use immediate sync so the resolved status reaches Firestore without delay
+    localStorage.setItem(PW_RESET_KEY, JSON.stringify(resets))
+    try {
+      if (window.LibraryFirebase && window.LibraryFirebase.syncPwResetsNow) {
+        window.LibraryFirebase.syncPwResetsNow(resets)
+      } else if (window.LibraryFirebase && window.LibraryFirebase.syncPwResets) {
+        window.LibraryFirebase.syncPwResets(resets)
+      }
+    } catch (e) {}
     return { ok: true }
   }
 

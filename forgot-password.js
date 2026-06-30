@@ -40,12 +40,20 @@
     }
 
     if (submitBtn) submitBtn.disabled = true
-    showMsg('Sending your request...', 'success')
+    showMsg('Sending your request…', 'success')
 
     try {
-      await waitForFirebaseReady(3000)
+      // Wait for Firebase to be fully ready
+      await waitForFirebaseReady(5000)
+
+      // Pull the latest users from Firestore so this device knows all registered students
       if (window.LibraryFirebase && window.LibraryFirebase.pullUsers) {
         await window.LibraryFirebase.pullUsers()
+      }
+
+      // Also pull existing reset requests to avoid duplicates
+      if (window.LibraryFirebase && window.LibraryFirebase.pullPwResets) {
+        await window.LibraryFirebase.pullPwResets()
       }
 
       var result = LibraryAuth.createPasswordResetRequest(email, '')
@@ -54,12 +62,17 @@
         return
       }
 
-      if (window.LibraryFirebase && window.LibraryFirebase.syncPwResets) {
+      // Push immediately (no debounce) so admin sees the request right away
+      if (window.LibraryFirebase && window.LibraryFirebase.syncPwResetsNow) {
+        await window.LibraryFirebase.syncPwResetsNow(LibraryAuth.loadPwResets())
+      } else if (window.LibraryFirebase && window.LibraryFirebase.syncPwResets) {
         window.LibraryFirebase.syncPwResets(LibraryAuth.loadPwResets())
       }
+
       showMsg('Your request has been sent to the admin. Please wait for the library admin to reset your password.', 'success')
       form.reset()
     } catch (err) {
+      console.error('[ForgotPw]', err)
       showMsg('Could not send the request. Please try again.', 'error')
     } finally {
       if (submitBtn) submitBtn.disabled = false
