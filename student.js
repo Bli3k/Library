@@ -251,17 +251,30 @@
     var overdue = notReturned.filter(function (r) {
       return r.reviewedAt && Math.floor((Date.now() - new Date(r.reviewedAt).getTime()) / 86400000) >= 7
     })
+    // Books where the admin explicitly clicked "Notify" — this is a direct
+    // request from the library staff, so it gets its own banner above the
+    // generic overdue/borrowed ones.
+    var notified = notReturned.filter(function (r) { return !!r.returnNotifiedAt })
 
     var bannerHtml = ''
+    if (notified.length > 0) {
+      var titles = notified.map(function (r) { return r.bookTitle }).join(', ')
+      bannerHtml += '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:12px 16px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start;">'
+        + '<span style="font-size:20px;line-height:1;">&#128276;</span>'
+        + '<div><div style="font-weight:700;color:var(--danger);font-size:13.5px;margin-bottom:3px;">Reminder from the Library Admin</div>'
+        + '<div style="font-size:13px;color:#7f1d1d;">The admin has asked you to return <strong>' + escapeHtml(titles) + '</strong>. Please bring '
+        + (notified.length > 1 ? 'them' : 'it') + ' back to the library as soon as possible.</div>'
+        + '</div></div>'
+    }
     if (overdue.length > 0) {
-      bannerHtml = '<div style="background:#fff8ed;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start;">'
+      bannerHtml += '<div style="background:#fff8ed;border:1.5px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:flex-start;">'
         + '<span style="font-size:20px;line-height:1;">&#9888;&#65039;</span>'
         + '<div><div style="font-weight:700;color:#d97706;font-size:13.5px;margin-bottom:3px;">Please Return Your Book' + (overdue.length > 1 ? 's' : '') + '</div>'
         + '<div style="font-size:13px;color:#92400e;">You have <strong>' + overdue.length + '</strong> book' + (overdue.length > 1 ? 's' : '') + ' that '
         + (overdue.length > 1 ? 'have' : 'has') + ' been borrowed for 7 or more days. Please return ' + (overdue.length > 1 ? 'them' : 'it') + ' to the library at your earliest convenience.</div>'
         + '</div></div>'
-    } else if (notReturned.length > 0 && overdue.length === 0) {
-      bannerHtml = '<div style="background:var(--blue-lt);border:1.5px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;">'
+    } else if (notReturned.length > 0 && notified.length === 0) {
+      bannerHtml += '<div style="background:var(--blue-lt);border:1.5px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;align-items:center;">'
         + '<span style="font-size:18px;">&#128218;</span>'
         + '<div style="font-size:13px;color:#1e40af;">You currently have <strong>' + notReturned.length + '</strong> borrowed book' + (notReturned.length > 1 ? 's' : '') + '. Please return ' + (notReturned.length > 1 ? 'them' : 'it') + ' when you are done.</div>'
         + '</div>'
@@ -404,8 +417,39 @@
   })()
 
   // ── Initial render ─────────────────────────────────────────────────────────
-  renderBooks()
-  renderRequests()
-  initStudentNav()
+  function waitForFirebaseReady(timeoutMs) {
+    if (window.LibraryFirebase) return Promise.resolve()
+    return new Promise(function (resolve) {
+      var done = false
+      var timer = setTimeout(function () {
+        if (done) return
+        done = true
+        resolve()
+      }, timeoutMs || 5000)
+      window.addEventListener('libraryFirebaseReady', function () {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve()
+      }, { once: true })
+    })
+  }
+
+  async function initialRender() {
+    await waitForFirebaseReady(5000)
+    try {
+      if (window.LibraryFirebase) {
+        await Promise.all([
+          window.LibraryFirebase.pullBooks && window.LibraryFirebase.pullBooks(),
+          window.LibraryFirebase.pullRequests && window.LibraryFirebase.pullRequests()
+        ])
+      }
+    } catch (e) {}
+    renderBooks()
+    renderRequests()
+    initStudentNav()
+  }
+
+  initialRender()
 
 })()

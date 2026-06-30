@@ -347,7 +347,7 @@
     const idx = requests.findIndex(function (r) { return r.id === requestId })
     if (idx < 0) return { ok: false, error: 'Request not found.' }
     requests[idx] = Object.assign({}, requests[idx], { returnNotifiedAt: new Date().toISOString() })
-    saveRequests(requests)
+    saveRequestsImmediate(requests)
     return { ok: true, request: requests[idx] }
   }
 

@@ -457,16 +457,13 @@
     var requests = LibraryAuth.loadRequests()
     var req = requests.find(function (r) { return r.id === id })
     if (!req) return
-    // Show the admin a ready-made message to relay to the student
-    var daysOut = req.reviewedAt
-      ? Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000)
-      : 0
-    var msg = 'Reminder sent to ' + req.userName + '\n\n'
-      + 'Message to relay:\n'
-      + '"Hi ' + req.userName + ', this is a reminder from the BCST Library to please return the book \"' + req.bookTitle + '\" that you borrowed ' + daysOut + ' day(s) ago. '
-      + 'Please return it at your earliest convenience. Thank you!"'
-    alert(msg)
-    LibraryAuth.notifyReturn(id)
+    // This sends the reminder to the STUDENT's "My Requests" page (they'll see
+    // a "Reminder sent by admin" badge next to the book). It does not show a
+    // popup here on the admin's screen — that would only notify the admin,
+    // who already knows they just clicked the button.
+    if (!confirmAction('Send a return reminder to ' + req.userName + ' for "' + req.bookTitle + '"?')) return
+    var result = LibraryAuth.notifyReturn(id)
+    if (!result.ok) { alert(result.error); return }
     renderRequests()
   }
 
@@ -1299,9 +1296,55 @@
     populateStudentSelect()
   })
 
-  loadBooks()
-  try { dedupeStoredBooks() } catch (e) {}
-  renderTable(); renderRequests(); renderPwResets(); initAdminNav()
+  // ── Wait for Firebase's first pull before the initial render ──────────────
+  // firebase-config.js initializes asynchronously (it dynamically imports the
+  // Firebase SDK over the network), so just loading its <script> tag earlier
+  // is not enough on its own — admin.js can still run and call renderPwResets()
+  // / renderRequests() before that pull has actually finished. Without this
+  // wait, the admin only sees whatever was last cached in this browser's
+  // localStorage, and pending password-reset requests from other devices
+  // (web or desktop) stay invisible until some other event happens to fire.
+  function waitForFirebaseReady(timeoutMs) {
+    if (window.LibraryFirebase) return Promise.resolve()
+    return new Promise(function (resolve) {
+      var done = false
+      var timer = setTimeout(function () {
+        if (done) return
+        done = true
+        resolve()
+      }, timeoutMs || 5000)
+      window.addEventListener('libraryFirebaseReady', function () {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve()
+      }, { once: true })
+    })
+  }
 
-  window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
+  async function initialLoad() {
+    await waitForFirebaseReady(5000)
+    try {
+      if (window.LibraryFirebase) {
+        // Force a fresh pull (don't just rely on the one firebase-config.js
+        // kicks off internally) so we know it has actually completed by the
+        // time we render.
+        await Promise.all([
+          window.LibraryFirebase.pullBooks && window.LibraryFirebase.pullBooks(),
+          window.LibraryFirebase.pullRequests && window.LibraryFirebase.pullRequests(),
+          window.LibraryFirebase.pullUsers && window.LibraryFirebase.pullUsers(),
+          window.LibraryFirebase.pullPwResets && window.LibraryFirebase.pullPwResets()
+        ])
+      }
+    } catch (e) {}
+
+    loadBooks()
+    try { dedupeStoredBooks() } catch (e) {}
+    renderTable(); renderRequests(); renderPwResets(); renderAccounts(); populateStudentSelect()
+    initAdminNav()
+
+    window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
+  }
+
+  initialLoad()
 })()
