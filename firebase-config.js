@@ -376,7 +376,11 @@
           var remoteReturn  = rr.returnedAt && (rr.returnedAt !== local.returnedAt)
           // Also accept if remote cleared returnedAt (e.g. admin un-returned — rare but safe)
           var remoteUnreturn = !rr.returnedAt && local.returnedAt && rr.status === local.status
-          if (remoteActed || remoteNewer || remoteReturn || remoteUnreturn) {
+          // Accept a new/changed "Notify" reminder from the admin even when
+          // status/reviewedAt/returnedAt are unchanged — otherwise the
+          // reminder banner never reaches the student's device.
+          var remoteNotified = rr.returnNotifiedAt && rr.returnNotifiedAt !== local.returnNotifiedAt
+          if (remoteActed || remoteNewer || remoteReturn || remoteUnreturn || remoteNotified) {
             localMap.set(key, rr); changed = true
           }
         }
