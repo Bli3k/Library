@@ -457,16 +457,13 @@
     var requests = LibraryAuth.loadRequests()
     var req = requests.find(function (r) { return r.id === id })
     if (!req) return
-    // Show the admin a ready-made message to relay to the student
-    var daysOut = req.reviewedAt
-      ? Math.floor((Date.now() - new Date(req.reviewedAt).getTime()) / 86400000)
-      : 0
-    var msg = 'Reminder sent to ' + req.userName + '\n\n'
-      + 'Message to relay:\n'
-      + '"Hi ' + req.userName + ', this is a reminder from the BCST Library to please return the book \"' + req.bookTitle + '\" that you borrowed ' + daysOut + ' day(s) ago. '
-      + 'Please return it at your earliest convenience. Thank you!"'
-    alert(msg)
-    LibraryAuth.notifyReturn(id)
+    // This sends the reminder to the STUDENT's "My Requests" page (they'll see
+    // a "Reminder sent by admin" badge next to the book). It does not show a
+    // popup here on the admin's screen — that would only notify the admin,
+    // who already knows they just clicked the button.
+    if (!confirmAction('Send a return reminder to ' + req.userName + ' for "' + req.bookTitle + '"?')) return
+    var result = LibraryAuth.notifyReturn(id)
+    if (!result.ok) { alert(result.error); return }
     renderRequests()
   }
 
@@ -1213,23 +1210,15 @@
         // Electron fix: force focus on click
         pwInput.addEventListener('mousedown', function (e) { e.stopPropagation(); setTimeout(function () { pwInput.focus() }, 0) })
 
-        // Give each input a unique ID so the eye button can use data-target.
-        // Without this, ui.js's document-level delegation handler AND this
-        // direct click listener both fire on every click — toggling the type
-        // twice per click, immediately reversing back to 'password' and making
-        // the eye button appear completely broken.
-        var pwInputId = 'pw-reset-input-' + r.id
-        pwInput.id = pwInputId
-
         var eyeBtn = document.createElement('button')
-        eyeBtn.type           = 'button'
-        eyeBtn.title          = 'Show/hide'
-        eyeBtn.className      = 'eye-btn'
-        eyeBtn.dataset.target = pwInputId  // tells ui.js which input to toggle
-        eyeBtn.style.cssText  = 'position:relative;right:auto;bottom:auto;'
+        eyeBtn.type      = 'button'
+        eyeBtn.title     = 'Show/hide'
+        eyeBtn.className = 'eye-btn'
+        eyeBtn.style.cssText = 'position:relative;right:auto;bottom:auto;'
         eyeBtn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
-        // NO direct click listener here — ui.js handles all .eye-btn clicks
-        // via document-level delegation. Two handlers = two toggles = broken.
+        eyeBtn.addEventListener('click', function () {
+          pwInput.type = pwInput.type === 'password' ? 'text' : 'password'
+        })
 
         var resolveBtn = document.createElement('button')
         resolveBtn.type      = 'button'
@@ -1307,9 +1296,48 @@
     populateStudentSelect()
   })
 
-  loadBooks()
-  try { dedupeStoredBooks() } catch (e) {}
-  renderTable(); renderRequests(); renderPwResets(); initAdminNav()
 
-  window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
+  function waitForFirebaseReady(timeoutMs) {
+    if (window.LibraryFirebase) return Promise.resolve()
+    return new Promise(function (resolve) {
+      var done = false
+      var timer = setTimeout(function () {
+        if (done) return
+        done = true
+        resolve()
+      }, timeoutMs || 5000)
+      window.addEventListener('libraryFirebaseReady', function () {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve()
+      }, { once: true })
+    })
+  }
+
+  async function initialLoad() {
+    await waitForFirebaseReady(5000)
+    try {
+      if (window.LibraryFirebase) {
+        // Force a fresh pull (don't just rely on the one firebase-config.js
+        // kicks off internally) so we know it has actually completed by the
+        // time we render.
+        await Promise.all([
+          window.LibraryFirebase.pullBooks && window.LibraryFirebase.pullBooks(),
+          window.LibraryFirebase.pullRequests && window.LibraryFirebase.pullRequests(),
+          window.LibraryFirebase.pullUsers && window.LibraryFirebase.pullUsers(),
+          window.LibraryFirebase.pullPwResets && window.LibraryFirebase.pullPwResets()
+        ])
+      }
+    } catch (e) {}
+
+    loadBooks()
+    try { dedupeStoredBooks() } catch (e) {}
+    renderTable(); renderRequests(); renderPwResets(); renderAccounts(); populateStudentSelect()
+    initAdminNav()
+
+    window.libraryApp = { books, saveBooks, loadBooks, renderTable, renderRequests }
+  }
+
+  initialLoad()
 })()
