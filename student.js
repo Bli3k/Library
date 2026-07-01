@@ -325,6 +325,44 @@
     requestsWrap.innerHTML = html
   }
 
+  // ── Notification banner on the books (first) screen ──────────────────────
+  // Shows admin return reminders and overdue alerts at the top of the books view.
+  // Disappears automatically when the admin marks the book as returned.
+  function renderNotificationBanner() {
+    var bar = document.getElementById('student-notify-bar')
+    if (!bar) return
+
+    var allReqs    = LibraryAuth.loadRequests().filter(function (r) { return r.userId === user.id })
+    var notReturned = allReqs.filter(function (r) { return r.status === 'approved' && !r.returnedAt })
+    var notified   = notReturned.filter(function (r) { return !!r.returnNotifiedAt })
+    var overdue    = notReturned.filter(function (r) {
+      return r.reviewedAt && Math.floor((Date.now() - new Date(r.reviewedAt).getTime()) / 86400000) >= 7
+    })
+
+    var html = ''
+
+    if (notified.length > 0) {
+      var titles = notified.map(function (r) { return escapeHtml(r.bookTitle) }).join(', ')
+      html = '<div style="background:#fef2f2;border:1.5px solid #fca5a5;border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start;">'
+        + '<span style="font-size:22px;line-height:1.2;flex-shrink:0;">&#128276;</span>'
+        + '<div>'
+        + '<div style="font-weight:700;color:var(--danger);font-size:13.5px;margin-bottom:4px;">Reminder from the Library Admin</div>'
+        + '<div style="font-size:13px;color:#7f1d1d;">The admin has asked you to return <strong>' + titles + '</strong>. Please bring '
+        + (notified.length > 1 ? 'them' : 'it') + ' back to the library as soon as possible.</div>'
+        + '</div></div>'
+    } else if (overdue.length > 0) {
+      html = '<div style="background:#fff8ed;border:1.5px solid #fcd34d;border-radius:10px;padding:13px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:flex-start;">'
+        + '<span style="font-size:22px;line-height:1.2;flex-shrink:0;">&#9888;&#65039;</span>'
+        + '<div>'
+        + '<div style="font-weight:700;color:#d97706;font-size:13.5px;margin-bottom:4px;">Please Return Your Book' + (overdue.length > 1 ? 's' : '') + '</div>'
+        + '<div style="font-size:13px;color:#92400e;">You have <strong>' + overdue.length + '</strong> book' + (overdue.length > 1 ? 's' : '') + ' borrowed for 7 or more days. Please return '
+        + (overdue.length > 1 ? 'them' : 'it') + ' to the library at your earliest convenience.</div>'
+        + '</div></div>'
+    }
+
+    bar.innerHTML = html
+  }
+
   // ── Borrow action ──────────────────────────────────────────────────────────
   function onBorrow(e) {
     const bookId = e.currentTarget.dataset.id
@@ -393,7 +431,9 @@
     currentPage = 1; renderBooks()
   })
   window.addEventListener('libraryRequestsUpdated', function () {
-    renderRequests(); renderBooks()  // re-render books so borrow buttons update
+    renderRequests()
+    renderBooks()            // re-render books so borrow buttons update
+    renderNotificationBanner()  // refresh the banner on the first screen
   })
 
   // ── Firebase status pill ───────────────────────────────────────────────────
@@ -447,6 +487,7 @@
     } catch (e) {}
     renderBooks()
     renderRequests()
+    renderNotificationBanner()  // show admin reminders on the first screen right away
     initStudentNav()
   }
 
